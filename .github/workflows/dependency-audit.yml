@@ -1,0 +1,31 @@
+name: Dependency security audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/dependency-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: npm ci --ignore-scripts
+      - name: Inspect advisories without applying blind upgrades
+        run: |
+          npm audit --json > dependency-audit.json || true
+          node -e "const a=require('./dependency-audit.json');for(const [n,v] of Object.entries(a.vulnerabilities||{}))console.log(n,JSON.stringify(v));"
+          echo 'Current Playwright:'
+          npm view @playwright/test version
+          echo 'Current Next.js:'
+          npm view next version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit
+          path: dependency-audit.json
+          retention-days: 7
