@@ -1,0 +1,58 @@
+name: Import application features
+on:
+  push:
+    branches: [master]
+    paths: ['.delivery-manifests/*.json']
+permissions:
+  contents: write
+concurrency:
+  group: feature-delivery
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Verify exact source and push each feature separately
+        shell: python
+        run: |
+          import base64,hashlib,json,pathlib,subprocess,zlib
+          root=pathlib.Path.cwd()
+          def git(*args):
+              return subprocess.run(['git',*args],check=True)
+          git('config','user.name','github-actions[bot]')
+          git('config','user.email','41898282+github-actions[bot]@users.noreply.github.com')
+          for manifest in sorted(root.glob('.delivery-manifests/*.json')):
+              metadata=json.loads(manifest.read_text())
+              chunks=[]
+              for part in metadata['parts']:
+                  path=pathlib.Path(part['path'])
+                  assert path.parts[0]=='.delivery-parts' and '..' not in path.parts
+                  value=(root/path).read_text().strip()
+                  assert hashlib.sha256(value.encode()).hexdigest()==part['sha256'],str(path)+' checksum mismatch'
+                  chunks.append(value)
+              raw=zlib.decompress(base64.b64decode(''.join(chunks),validate=True))
+              assert hashlib.sha256(raw).hexdigest()==metadata['sha256'],'Application checksum mismatch'
+              groups=json.loads(raw)
+              for group in groups:
+                  paths=[]
+                  for name,content in group['files'].items():
+                      path=pathlib.Path(name)
+                      assert not path.is_absolute() and '..' not in path.parts and '.git' not in path.parts
+                      assert not name.startswith('.env') or name=='.env.example'
+                      target=root/path
+                      target.parent.mkdir(parents=True,exist_ok=True)
+                      if content is None: target.unlink(missing_ok=True)
+                      else: target.write_text(content)
+                      paths.append(name)
+                  git('add','--',*paths)
+                  if subprocess.run(['git','diff','--cached','--quiet']).returncode:
+                      git('commit','-m',group['message'])
+                      git('push','origin','HEAD:master')
+              git('rm',*[p['path'] for p in metadata['parts']],str(manifest.relative_to(root)))
+              git('commit','-m','build: remove verified source transport after feature delivery')
+              git('push','origin','HEAD:master')
