@@ -1,0 +1,39 @@
+name: Test tooling
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.github/workflows/test-tooling.yml']
+permissions:
+  contents: write
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Resolve and commit exact transitive dependency lock
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'build: lock verified npm dependency resolution'
+            git push
+          fi
+      - name: Package isolated PostgreSQL 17 test binaries
+        run: |
+          docker run --name pgtools --entrypoint bash postgres:17-bookworm -c '
+            mkdir -p /out/deps
+            ldd /usr/lib/postgresql/17/bin/* /usr/lib/postgresql/17/lib/pgcrypto.so 2>/dev/null | awk "{print \$3}" | grep "^/" | sort -u | grep -Ev "/(libc|libm|libpthread|libdl|librt|libresolv)\.so|ld-linux" | xargs -r cp -L -t /out/deps
+            cp -a /usr/lib/postgresql/17 /out/postgresql
+            cp -a /usr/share/postgresql/17 /out/share
+            cd /out && tar -czf tooling.tgz deps postgresql share
+          '
+          docker cp pgtools:/out/tooling.tgz tooling.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: postgres-test-tooling
+          path: tooling.tgz
+          retention-days: 2
