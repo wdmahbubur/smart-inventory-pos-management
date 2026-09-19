@@ -8,13 +8,20 @@ import {ProductIcon} from '@/components/brand';
 import {OperationFeedback} from '@/components/operation-feedback';
 import {useOperation} from '@/lib/client/use-operation';
 import {useWorkspace} from '@/components/workspace-context';
-import type {Category,Supplier,OperationResult} from '@/lib/domain';
-export function AppearanceFields({icon,color,onIcon,onColor}:{icon:string;color:string;onIcon:(value:string)=>void;onColor:(value:string)=>void}){
- return <><div className="field"><label>Product icon</label><div className="segmented">{['package','bottle','bag','bread','milk','store'].map(value=><button key={value} type="button" aria-label={`${value} icon`} aria-pressed={icon===value} className={icon===value?'active':''} onClick={()=>onIcon(value)}><ProductIcon icon={value} color={color} size={18}/></button>)}</div></div><div className="field"><label>Color preset</label><div className="segmented">{['emerald','amber','blue','rose','violet','sand'].map(value=><button type="button" key={value} aria-label={`${value} color`} aria-pressed={color===value} className={color===value?'active':''} onClick={()=>onColor(value)}><span className={`swatch ${value}`} style={{width:20,height:20}}><span aria-hidden="true">●</span></span></button>)}</div></div></>;
+import type {Category,Supplier,OperationResult,IconKey,ColorKey} from '@/lib/domain';
+const icons:IconKey[]=['package','bottle','bag','bread','milk','store'];
+const colors:ColorKey[]=['emerald','amber','blue','rose','violet','sand'];
+export function AppearanceFields({icon,color,onIcon,onColor}:{icon:string;color:string;onIcon:(value:IconKey)=>void;onColor:(value:ColorKey)=>void}){
+ return <><div className="field"><span>Product icon</span><div className="segmented" role="group" aria-label="Product icon">{icons.map(value=><button key={value} type="button" aria-label={`${value} icon`} aria-pressed={icon===value} className={icon===value?'active':''} onClick={()=>onIcon(value)}><ProductIcon icon={value} color={color} size={18}/></button>)}</div></div><div className="field"><span>Color preset</span><div className="segmented" role="group" aria-label="Color preset">{colors.map(value=><button type="button" key={value} aria-label={`${value} color`} aria-pressed={color===value} className={color===value?'active':''} onClick={()=>onColor(value)}><span className={`swatch ${value}`} style={{width:20,height:20}}><span aria-hidden="true">●</span></span></button>)}</div></div></>;
 }
 export function CatalogEditor({kind,record,onSaved,compact=false}:{kind:'category'|'supplier';record?:Category|Supplier;onSaved?:(value:{id:string;name:string})=>void;compact?:boolean}){
  const [open,setOpen]=useState(false);const workspace=useWorkspace();const router=useRouter();const prefix=useId();
- const [name,setName]=useState(record?.name??'');const [description,setDescription]=useState(record&&'description'in record?record.description??'':'');const [phone,setPhone]=useState(record&&'phone'in record?record.phone??'':'');const [address,setAddress]=useState(record&&'address'in record?record.address??'':'');const [icon,setIcon]=useState(record&&'icon_key'in record?record.icon_key:'package');const [color,setColor]=useState(record&&'color_key'in record?record.color_key:'emerald');
+ const [name,setName]=useState(record?.name??'');
+ const [description,setDescription]=useState(record&&'description'in record?record.description??'':'');
+ const [phone,setPhone]=useState(record&&'phone'in record?record.phone??'':'');
+ const [address,setAddress]=useState(record&&'address'in record?record.address??'':'');
+ const [icon,setIcon]=useState<IconKey>(record&&'icon_key'in record?record.icon_key:'package');
+ const [color,setColor]=useState<ColorKey>(record&&'color_key'in record?record.color_key:'emerald');
  const operation=useOperation(`${workspace.store.id}:${kind}:${record?.id??'new'}`);
  function success(result:OperationResult){setOpen(false);onSaved?.({id:result.id,name});router.refresh();if(!record){setName('');setDescription('');setPhone('');setAddress('');}}
  async function submit(event:FormEvent<HTMLFormElement>){event.preventDefault();const payload={...(record?{id:record.id,expected_version:record.version}:{}),name,...(kind==='category'?{description,icon_key:icon,color_key:color}:{phone,address})};const result=await operation.submit({operation:'catalog',kind,action:'save',payload});if(result)success(result);}

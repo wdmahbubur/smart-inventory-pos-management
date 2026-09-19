@@ -49,6 +49,17 @@ jobs:
         run: |
           set -euo pipefail
           npm run verify 2>&1 | tee test-results/application.txt
+      - name: Package offline development runtime
+        if: always()
+        run: |
+          set -euo pipefail
+          tar -czf /tmp/inventory-offline-runtime.tar.gz src tests scripts supabase node_modules package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs 2>/dev/null || tar -czf /tmp/inventory-offline-runtime.tar.gz src tests scripts supabase node_modules package.json package-lock.json tsconfig.json next.config.ts eslint.config.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: offline-runtime-${{ github.sha }}
+          path: /tmp/inventory-offline-runtime.tar.gz
+          retention-days: 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
