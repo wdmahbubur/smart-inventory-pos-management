@@ -6,7 +6,7 @@ import type {SeedResult} from '../../scripts/seed';
 interface Fixture extends SeedResult {email:string}
 const fixtures=JSON.parse(readFileSync('.local-browser-fixtures.json','utf8')) as {password:string;'pre-sale':Fixture;'post-sale':Fixture};
 async function login(page:Page,state:'pre-sale'|'post-sale'='post-sale'){
- await page.goto('/login');await page.getByLabel('Email address').fill(fixtures[state].email);await page.getByLabel('Password',{exact:true}).fill(fixtures.password);await page.getByRole('button',{name:'Log in',exact:true}).click();await expect(page).toHaveURL(/\/dashboard$/);await expect(page.getByRole('heading',{name:'Dashboard',exact:true})).toBeVisible();
+ await page.goto('/login');await page.getByLabel('Email address').fill(fixtures[state].email);await page.getByLabel('Password',{exact:true}).fill(fixtures.password);await page.getByRole('button',{name:'Log in',exact:true}).click();await expect(page).toHaveURL(/\/dashboard$/);await expect(page.getByRole('heading',{name:'Your store, at a glance',exact:true})).toBeVisible();
 }
 async function emailLink(email:string,subject:string):Promise<string>{
  let id='';await expect.poll(async()=>{const response=await fetch('http://127.0.0.1:54324/api/v1/messages');if(!response.ok)return '';const data=await response.json() as {messages:{ID:string;Subject:string;To:{Address:string}[]}[]};id=data.messages.find(m=>m.To.some(to=>to.Address===email)&&m.Subject.toLowerCase().includes(subject))?.ID??'';return id;},{timeout:30000}).not.toBe('');
@@ -38,7 +38,7 @@ test('real Auth JWT and PostgREST isolate owners, forbid balance writes and auth
 
 test('draft isolation, responsive POS, lost checkout response and same-receipt recovery',async({page})=>{
  await login(page,'pre-sale');page.on('dialog',dialog=>void dialog.accept());
- await page.goto(`/purchases/${fixtures['pre-sale'].draftId}/edit`);await expect(page.getByRole('heading',{name:'Edit draft P-0013'})).toBeVisible();
+ await page.goto(`/purchases/${fixtures['pre-sale'].draftId}/edit`);await expect(page.getByRole('heading',{name:'Record a purchase',exact:true})).toBeVisible();await expect(page.getByText('Continue P-0013.',{exact:false})).toBeVisible();
  const stockBefore=await page.request.get(`/api/catalog?kind=products&id=${fixtures['pre-sale'].products['DA-001'].id}`);expect((await stockBefore.json()).result.quantity).toBe(3);
  await page.goto('/pos');await page.getByRole('button',{name:'Add Coke 1L to cart',exact:true}).click();await page.getByRole('button',{name:'Add Coke 1L to cart',exact:true}).click();for(let i=0;i<3;i++)await page.getByRole('button',{name:'Add Chips 50g to cart',exact:true}).click();
  await page.getByLabel('Order discount (৳)').fill('20');await page.getByLabel('Cash received (৳)').fill('500');await capture(page,'13-POS-presale',1440);
@@ -55,11 +55,17 @@ test('missing AI keeps source facts and keyboard dialog restores focus',async({p
 });
 
 for(const width of [360,390,768,1024,1440,1920])test(`all 22 reference routes render without page overflow at ${width}px`,async({page})=>{
- test.setTimeout(240000);await page.setViewportSize({width,height:width<768?844:1024});
+ test.setTimeout(240000);page.on('dialog',dialog=>void dialog.accept());await page.setViewportSize({width,height:width<768?844:1024});
  for(const [name,path]of [['01-Landing','/'],['02-Registration','/register'],['03-Login','/login'],['04-Password-Recovery','/forgot-password']]){await page.goto(path);await expect(page.locator('h1')).toBeVisible();await noOverflow(page);if(width===1440||width===390)await capture(page,name,width);}
  await login(page);const f=fixtures['post-sale'];
- const routes=[['05-Dashboard','/dashboard'],['06-Products','/products'],['07-Add-Product','/products/new'],['08-Categories','/categories'],['09-Suppliers','/suppliers'],['10-Purchase-History','/purchases?from=2026-09-18&to=2026-09-18'],['11-New-Purchase',`/purchases/${f.draftId}/edit`],['12-Purchase-Details',`/purchases/${f.purchaseId}`],['13-POS','/pos'],['14-Sales-History','/sales'],['15-Sales-Receipt',`/sales/${f.saleId}`],['16-Current-Inventory','/inventory'],['17-Stock-Movement','/inventory/movements?from=2026-09-18&to=2026-09-18'],['18-Low-Stock','/inventory/low-stock'],['19-Sales-Report','/reports/sales?from=2026-09-18&to=2026-09-18'],['20-Purchase-Report','/reports/purchases?from=2026-09-18&to=2026-09-18'],['21-Inventory-Report','/reports/inventory'],['22-AI-Insights','/insights']];
- for(const [name,path]of routes){await page.goto(path);await expect(page.locator('.page-heading h1')).toBeVisible();await expect(page.getByText('We could not load this page')).not.toBeVisible();await noOverflow(page);if(width===1440||width===390)await capture(page,name,width);}
+ const routes=[['05-Dashboard','/dashboard'],['06-Products','/products'],['07-Add-Product','/products/new'],['08-Categories','/categories'],['09-Suppliers','/suppliers'],['10-Purchase-History','/purchases?from=2026-09-18&to=2026-09-18'],['11-New-Purchase','/purchases/new'],['12-Purchase-Details',`/purchases/${f.purchaseId}`],['13-POS','/pos'],['14-Sales-History','/sales'],['15-Sales-Receipt',`/sales/${f.saleId}`],['16-Current-Inventory','/inventory'],['17-Stock-Movement','/inventory/movements?from=2026-09-18&to=2026-09-18'],['18-Low-Stock','/inventory/low-stock'],['19-Sales-Report','/reports/sales?from=2026-09-18&to=2026-09-18'],['20-Purchase-Report','/reports/purchases?from=2026-09-18&to=2026-09-18'],['21-Inventory-Report','/reports/inventory'],['22-AI-Insights','/insights']];
+ for(const [name,path]of routes){await page.goto(path);await expect(page.locator('.page-heading h1')).toBeVisible();
+  if(name==='07-Add-Product'){
+   await page.getByLabel('Product name',{exact:true}).fill('Orange drink 1L');await page.getByLabel('SKU',{exact:true}).fill('DR-003');
+   await page.locator('button.picker-trigger').filter({hasText:'Select category'}).click();await page.getByRole('dialog').getByLabel('Search categories',{exact:true}).fill('Drinks');await page.getByRole('dialog').getByRole('button',{name:/^Drinks/}).click();
+   await page.getByLabel('Stock unit').selectOption('bottle');await page.getByLabel('Minimum stock',{exact:true}).fill('10');await page.getByLabel('Reference purchase cost (৳)').fill('60.00');await page.getByLabel('Selling price (৳)').fill('90.00');await page.getByLabel('Description (optional)',{exact:true}).fill('1 litre orange-flavoured drink');
+  }
+ await expect(page.getByText('We could not load this page')).not.toBeVisible();await noOverflow(page);if(width===1440||width===390)await capture(page,name,width);}
 });
 
 test('unauthenticated reads and exports never expose a store',async({page})=>{await page.goto('/dashboard');await expect(page).toHaveURL(/login/);expect((await page.request.get('/api/catalog?kind=products')).status()).toBe(401);expect((await page.request.get('/api/reports/inventory/export')).status()).toBe(401);expect((await page.request.get('/api/insights')).status()).toBe(401);});
