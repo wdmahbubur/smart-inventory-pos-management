@@ -1,6 +1,6 @@
 # Implementation status — 19 September 2026
 
-**Branch:** `feat/complete-inventory-application` · **PR:** #1. This is a functional application, not a static design bundle. It is **not yet a signed-off hosted release**: the dedicated hosted database, Vercel deployment, real Gemini smoke test and final reference-parity review remain open.
+**Branch:** `master` · **PR #1:** merged. This is a functional application, not a static design bundle. It is **not yet a signed-off hosted release**: the dedicated hosted database, Vercel deployment, real Gemini smoke test and final reference-parity review remain open.
 
 ## Implemented scope
 
@@ -23,7 +23,7 @@ These ranges are coverage mappings, **not a claim that every subcase of all 60 a
 
 Migration 010 additionally scopes custom query planning to the report RPC. All **10 migrations** applied cleanly to a new disposable database, and the **24 database tests** passed again locally. The final local 50,000-line benchmark passed every reconciliation and recorded 96.19ms purchase-report p95; these are localhost SQL measurements, not deployed latency. The CI workflow repeats this benchmark and the authenticated 100,001-row export-limit check; the final run passed both.
 
-Feature pushes in this continuation include dialog accessibility (`255f6d7`), scoped ledger validation (`b8ac85e`), bounded streaming request bodies (`2457ead`), real new-owner/concurrent Supabase browser coverage (`0e98d86`), parameter-aware report planning/CI benchmark (`9702caf`), reference-aligned Products/Categories/Purchases/Inventory screens (`dc91667`–`3144a33`), streamed bounded CSV exports (`6742c2f`–`1fa6b7d`), Vercel-native config (`4ee049f` / `07493ef`) and release QA/documentation.
+The merged implementation history includes dialog accessibility (`255f6d7`), scoped ledger validation (`b8ac85e`), bounded streaming request bodies (`2457ead`), real new-owner/concurrent Supabase browser coverage (`0e98d86`), parameter-aware report planning/CI benchmark (`9702caf`), reference-aligned Products/Categories/Purchases/Inventory screens (`dc91667`–`3144a33`), streamed bounded CSV exports (`6742c2f`–`1fa6b7d`), Vercel-native config (`4ee049f` / `07493ef`) and release QA/documentation.
 
 ## Remaining release gates
 

@@ -2,7 +2,7 @@
 
 A responsive Next.js App Router / TypeScript application for one owner and one store. Catalog, received purchases, cash POS, immutable receipts, inventory, reports and source facts use authenticated Supabase data. AI is optional and cannot write stock.
 
-**Implementation branch:** `feat/complete-inventory-application`, tracked in pull request #1. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), [TEST_RESULTS.md](TEST_RESULTS.md) and [VISUAL_QA.md](VISUAL_QA.md) for implemented scope, executed checks and remaining release gates. A live deployment or successful Gemini call is not implied by a production build.
+**Default branch:** `master`; implementation PR #1 was merged after green verification. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md), [TEST_RESULTS.md](TEST_RESULTS.md) and [VISUAL_QA.md](VISUAL_QA.md) for implemented scope, executed checks and remaining release gates. A live deployment or successful Gemini call is not implied by a production build.
 
 ## Requirements and install
 
@@ -11,7 +11,6 @@ Use Node **22.16.0**, npm **10.9.2**, PostgreSQL **17**, and Supabase CLI **2.11
 ```sh
 git clone https://github.com/wdmahbubur/smart-inventory-pos-management.git
 cd smart-inventory-pos-management
-git checkout feat/complete-inventory-application
 nvm use
 npm ci
 cp .env.example .env.local
