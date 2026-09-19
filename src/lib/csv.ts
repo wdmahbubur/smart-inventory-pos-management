@@ -7,9 +7,40 @@ export function csvText(value:unknown):string{
  return '"'+text.replaceAll('"','""')+'"';
 }
 function cell(value:unknown,kind:CsvColumn['kind']){if(value==null)return '';if(kind==='money')return decimalMoney(String(value));if(kind==='number'){const text=String(value);if(!/^-?\d+(?:\.\d+)?$/.test(text))throw new Error('Invalid numeric export field.');return text;}return csvText(value);}
+export const CSV_MAX_ROWS=100_000;
+function checkSize(rows:Record<string,unknown>[]){
+ if(rows.length>CSV_MAX_ROWS)throw new Error('Export exceeds 100,000 source rows. Narrow the filters.');
+}
+function* csvLines(columns:CsvColumn[],rows:Record<string,unknown>[],context:Record<string,unknown>={}){
+ yield '\ufeff'+columns.map(c=>csvText(c.label)).join(',')+'\r\n';
+ for(const row of rows)yield columns.map(column=>cell(column.key in row?row[column.key]:context[column.key],column.kind)).join(',')+'\r\n';
+}
 export function serializeCsv(columns:CsvColumn[],rows:Record<string,unknown>[]):string{
- if(rows.length>100_000)throw new Error('Export exceeds 100,000 source rows.');
- return '\ufeff'+columns.map(c=>csvText(c.label)).join(',')+'\r\n'+rows.map(row=>columns.map(column=>cell(row[column.key],column.kind)).join(',')).join('\r\n')+'\r\n';
+ checkSize(rows);return Array.from(csvLines(columns,rows)).join('');
+}
+/** Stream bounded UTF-8 chunks after authorization and the full snapshot/row-limit check.
+ * This avoids a second complete CSV buffer and respects consumer backpressure.
+ * PostgreSQL still assembles one bounded, consistent source snapshot before streaming.
+ */
+export function streamCsv(columns:CsvColumn[],rows:Record<string,unknown>[],context:Record<string,unknown>={}):ReadableStream<Uint8Array>{
+ checkSize(rows);
+ const lines=csvLines(columns,rows,context),encoder=new TextEncoder();
+ let pending:Uint8Array|undefined,finished=false;
+ return new ReadableStream<Uint8Array>({
+  pull(controller){
+   if(finished&&!pending){controller.close();return;}
+   const chunks:Uint8Array[]=[];let bytes=0;
+   while(bytes<64*1024){
+    if(!pending){const next=lines.next();if(next.done){finished=true;break;}pending=encoder.encode(next.value);}
+    const remaining=64*1024-bytes,part=pending.subarray(0,remaining);
+    chunks.push(part);bytes+=part.byteLength;
+    pending=part.byteLength===pending.byteLength?undefined:pending.subarray(part.byteLength);
+   }
+   if(bytes){const output=new Uint8Array(bytes);let offset=0;for(const chunk of chunks){output.set(chunk,offset);offset+=chunk.byteLength;}controller.enqueue(output);}
+   if(finished&&!pending)controller.close();
+  },
+  cancel(){finished=true;pending=undefined;lines.return(undefined);}
+ });
 }
 export const reportColumns:Record<string,CsvColumn[]>={
  sales:[{key:'sale_id',label:'Sale ID'},{key:'number',label:'Receipt number'},{key:'completed_at',label:'Completed at (UTC)'},{key:'product_id',label:'Product ID'},{key:'product_name_snapshot',label:'Product snapshot'},{key:'sku_snapshot',label:'SKU snapshot'},{key:'unit_snapshot',label:'Unit'},{key:'quantity',label:'Quantity',kind:'number'},{key:'unit_price_paisa',label:'Sold unit price (BDT)',kind:'money'},{key:'line_gross_paisa',label:'Line gross before discount (BDT)',kind:'money'},{key:'order_discount_paisa',label:'Order discount (BDT; first stable line only)',kind:'money'}],
