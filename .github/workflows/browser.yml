@@ -1,0 +1,60 @@
+name: Supabase browser verification
+on:
+  push:
+    branches: [master, feat/complete-inventory-application]
+    paths: ['src/**','supabase/**','package*.json','next.config.ts','tsconfig.json','vercel.json','.nvmrc','.github/workflows/browser.yml','playwright.config.ts','scripts/**','tests/e2e/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SEED_ALLOW_LOCAL_DEMO: '1'
+      APP_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+      - name: Start real disposable Supabase
+        run: |
+          set -euo pipefail
+          supabase start -x realtime,imgproxy,storage-api,postgres-meta,studio,edge-runtime,logflare,vector,supavisor > /tmp/supabase-start.log 2>&1 || { sed -E 's/(eyJ[A-Za-z0-9_.-]+)/[REDACTED]/g' /tmp/supabase-start.log; exit 1; }
+          supabase status -o env > /tmp/supabase.env
+          set -a
+          source /tmp/supabase.env
+          set +a
+          printf 'NEXT_PUBLIC_SUPABASE_URL=%s\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%s\nSUPABASE_TEST_SERVICE_KEY=%s\nDATABASE_URL=%s\n' "$API_URL" "$ANON_KEY" "$SERVICE_ROLE_KEY" "$DB_URL" >> "$GITHUB_ENV"
+      - name: Build production app
+        run: npm run verify
+      - name: Prepare ledger-correct isolated demo accounts
+        run: npx tsx scripts/prepare-browser-fixtures.ts
+      - run: npx playwright install --with-deps chromium
+      - name: Real browser workflows and responsive captures
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-verification-${{ github.sha }}
+          path: |
+            test-results/browser-results.json
+            test-results/screenshots
+            test-results/*/*.png
+          retention-days: 7
+      - name: Stop only this disposable project
+        if: always()
+        run: supabase stop --no-backup

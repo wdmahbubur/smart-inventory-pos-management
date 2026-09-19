@@ -1,0 +1,45 @@
+import {AppError} from '../errors';
+import {money} from '../money';
+import {outputSchema,selectionSchema,type InventoryFacts,type Language,type InsightPolicy,type InsightOutput,type InsightSelection,type StoredInsight,type InsightContext,type DeliveredInsight} from './contracts';
+export function buildPolicy(facts:InventoryFacts,language:Language):InsightPolicy{
+ const bn=language==='bn';
+ const factMap:InsightPolicy['factMap']={
+  active_count:{label:'Active products',value:String(facts.inventory.active_count),kind:'number'},in_stock:{label:'In stock',value:String(facts.inventory.in_stock),kind:'number'},low_stock:{label:'Low stock',value:String(facts.inventory.low_stock),kind:'number'},out_of_stock:{label:'Out of stock',value:String(facts.inventory.out_of_stock),kind:'number'},attention_count:{label:'Products to review',value:String(facts.inventory.attention_count),kind:'number'},inventory_value:{label:'Reference-cost estimate',value:facts.inventory.value_paisa,kind:'money'},
+  sales_count:{label:'Completed sales today',value:String(facts.sales.count),kind:'number'},net_sales:{label:'Net sales today',value:facts.sales.total_paisa,kind:'money'},discounts:{label:'Order discounts today',value:facts.sales.discount_paisa??'0',kind:'money'},units_sold:{label:'Selling units sold today',value:String(facts.sales.units),kind:'number'},purchase_count:{label:'Received purchases today',value:String(facts.purchases.count),kind:'number'},received_value:{label:'Received value today',value:facts.purchases.total_paisa,kind:'money'},units_received:{label:'Selling units received today',value:String(facts.purchases.units),kind:'number'}
+ };
+ if(facts.highest_category){factMap.highest_category={label:'Highest-value category',value:facts.highest_category.name,kind:'text'};factMap.highest_category_value={label:'Highest category estimate',value:facts.highest_category.value_paisa,kind:'money'};}
+ const summaries={
+  overview:bn?'বর্তমান সক্রিয় পণ্য {{active_count}}টি। reference cost অনুযায়ী stock estimate {{inventory_value}}। আজকের সম্পন্ন বিক্রয় ও received purchase আলাদা করে নিচে দেখানো হয়েছে।':'There are {{active_count}} active products. The current reference-cost stock estimate is {{inventory_value}}. Today’s completed sales and received purchases are shown separately below.',
+  attention:bn?'স্টক পর্যালোচনার জন্য {{attention_count}}টি পণ্য আছে: {{low_stock}}টি minimum-এর নিচে এবং {{out_of_stock}}টি out of stock। প্রয়োজনীয় পরিমাণ নির্ধারণে minimum ও বর্তমান stock দেখুন।':'There are {{attention_count}} products to review: {{low_stock}} below minimum and {{out_of_stock}} out of stock. Use the recorded minimum and available stock to review replenishment quantities.',
+  activity:bn?'আজ {{sales_count}}টি সম্পন্ন বিক্রয়ের net sales {{net_sales}}। {{purchase_count}}টি received purchase-এর মূল্য {{received_value}}। এই দুই অঙ্কের পার্থক্য লাভ নয়।':'Today’s {{sales_count}} completed sales total {{net_sales}} net. The {{purchase_count}} received purchases total {{received_value}}. The difference between these amounts is not profit.'
+ };
+ const sections:InsightPolicy['sections']={
+  stock:{heading:bn?'যেসব পণ্য নজরে রাখা প্রয়োজন':'Stock to review',explanation:bn?'{{attention_count}}টি পণ্যের stock পর্যালোচনা প্রয়োজন। {{low_stock}}টি positive stock নিয়ে minimum-এর নিচে আছে; {{out_of_stock}}টির stock শূন্য। Suggested quantity হলো minimum থেকে available বাদ দিয়ে পাওয়া nonnegative পরিমাণ; এটি demand forecast নয়।':'Review {{attention_count}} products: {{low_stock}} have positive stock below minimum and {{out_of_stock}} have zero stock. Suggested quantity is the nonnegative difference between minimum and available stock, not a demand forecast.',fact_ids:['attention_count','low_stock','out_of_stock']},
+  activity:{heading:bn?'আজকের নথিভুক্ত কার্যক্রম':'Today’s posted activity',explanation:bn?'{{sales_count}}টি সম্পন্ন বিক্রয়ের net sales {{net_sales}}; order discount {{discounts}}। {{purchase_count}}টি received purchase-এর মূল্য {{received_value}}। Draft purchase এই মোটে অন্তর্ভুক্ত নয়, এবং cash tender বিক্রয় আয় নয়।':'The {{sales_count}} completed sales have net sales of {{net_sales}}, after {{discounts}} in order discounts. The {{purchase_count}} received purchases total {{received_value}}. Drafts are excluded and cash tender is not revenue.',fact_ids:['sales_count','net_sales','discounts','purchase_count','received_value']}
+ };
+ if(facts.highest_category)sections.category={heading:bn?'বর্তমান স্টকের আনুমানিক মূল্য':'Current stock estimate',explanation:bn?'reference cost অনুযায়ী সর্বোচ্চ category estimate {{highest_category}}-তে {{highest_category_value}}। সব সক্রিয় পণ্যের মোট estimate {{inventory_value}}। এটি accounting valuation বা profit নয়।':'The highest current category estimate is {{highest_category}} at {{highest_category_value}}. All active products total {{inventory_value}} using current reference costs. This is not accounting valuation or profit.',fact_ids:['highest_category','highest_category_value','inventory_value']};
+ return {summaries,sections,factMap};
+}
+function sameIds(left:string[],right:string[]){return left.length===right.length&&new Set(left).size===left.length&&left.every(id=>right.includes(id));}
+export function validateOutput(raw:unknown,policy:InsightPolicy):InsightSelection{
+ if(JSON.stringify(raw).length>16_000)throw new AppError('AI_INVALID_OUTPUT');
+ const parsed=outputSchema.safeParse(raw);if(!parsed.success)throw new AppError('AI_INVALID_OUTPUT');
+ const output=parsed.data;
+ const summary=Object.entries(policy.summaries).find(([,text])=>text===output.summary)?.[0];
+ if(!summary)throw new AppError('AI_INVALID_OUTPUT');
+ const sectionKeys:string[]=[];
+ for(const section of output.sections){const entry=Object.entries(policy.sections).find(([,allowed])=>allowed&&allowed.heading===section.heading&&allowed.explanation===section.explanation&&sameIds(allowed.fact_ids,section.fact_ids));if(!entry)throw new AppError('AI_INVALID_OUTPUT');sectionKeys.push(entry[0]);}
+ const selection=selectionSchema.safeParse({summary_key:summary,section_keys:sectionKeys});if(!selection.success)throw new AppError('AI_INVALID_OUTPUT');
+ return selection.data;
+}
+export function expandSelection(selection:InsightSelection,policy:InsightPolicy):InsightOutput{
+ const parsed=selectionSchema.parse(selection);
+ return {summary:policy.summaries[parsed.summary_key],sections:parsed.section_keys.map(key=>{const section=policy.sections[key];if(!section)throw new AppError('AI_INVALID_OUTPUT');return section;})};
+}
+export function resolveFacts(text:string,policy:InsightPolicy,language:Language):string{
+ return text.replace(/\{\{([a-z_]+)\}\}/g,(_,id:string)=>{const fact=policy.factMap[id];if(!fact)throw new AppError('AI_INVALID_OUTPUT');const value=fact.kind==='money'?money(fact.value):fact.value;return language==='bn'&&fact.kind!=='text'?value.replace(/[0-9]/g,d=>String.fromCharCode(0x09e6+Number(d))):value;});
+}
+export function deliverInsight(stored:StoredInsight,current:InsightContext):DeliveredInsight{
+ const policy=buildPolicy(stored.facts_snapshot,stored.language),output=expandSelection(stored.content,policy);
+ return {...stored,output:{summary:resolveFacts(output.summary,policy,stored.language),sections:output.sections.map(section=>({...section,explanation:resolveFacts(section.explanation,policy,stored.language)}))},stale:stored.store_data_revision!==current.facts.data_revision||stored.business_date!==current.facts.business_date||stored.facts_hash!==current.facts_hash};
+}

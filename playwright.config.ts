@@ -1,0 +1,2 @@
+import {defineConfig} from '@playwright/test';
+export default defineConfig({testDir:'./tests/e2e',fullyParallel:false,workers:1,retries:0,timeout:90000,expect:{timeout:15000},reporter:[['list'],['json',{outputFile:'test-results/browser-results.json'}]],use:{baseURL:'http://127.0.0.1:3000',browserName:'chromium',viewport:{width:1440,height:1024},trace:'off',video:'off',screenshot:'only-on-failure'},webServer:{command:'npm run start -- --hostname 127.0.0.1',url:'http://127.0.0.1:3000',reuseExistingServer:!process.env.CI,timeout:120000}});

@@ -11,13 +11,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.16.0'
-      - run: npm ci
-      - name: Collect development dependencies and current source
+      - run: npm ci --ignore-scripts
+      - name: Collect development dependencies and current tracked source
         run: |
-          tar -czf /tmp/workspace.tgz --exclude=.git .
+          tar -czf /tmp/workspace.tgz --exclude=.git --exclude=.delivery-parts --exclude='.env.local' --exclude='.local-browser-fixtures.json' .
           mv /tmp/workspace.tgz workspace.tgz
       - name: Collect isolated PostgreSQL 17 binaries
         run: |
