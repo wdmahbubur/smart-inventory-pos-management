@@ -1,0 +1,13 @@
+import { cp, mkdir, rm, writeFile, readFile, access } from 'node:fs/promises';
+import { validateConfig } from '../src/core.js';
+const out = new URL('../dist/', import.meta.url);
+await rm(out, { recursive: true, force: true }); await mkdir(out, { recursive: true });
+for (const name of ['src','public']) await cp(new URL(`../${name}/`, import.meta.url), new URL(name === 'public' ? './' : './src/', out), { recursive: true });
+await cp(new URL('../index.html', import.meta.url), new URL('index.html', out));
+let config = { supabaseUrl: '', supabaseKey: '' };
+if (process.env.SUPABASE_URL || process.env.SUPABASE_PUBLISHABLE_KEY) config = validateConfig(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY);
+await writeFile(new URL('config.js', out), `export const config = Object.freeze(${JSON.stringify(config)});\n`);
+const html = await readFile(new URL('index.html', out),'utf8');
+if (!html.includes('/src/app.js')) throw new Error('Application entrypoint missing.');
+for(const file of ['app.js','core.js','supabase.js','ui.js','catalog.js','commerce.js','reports.js','assistant.js','styles.css']) await access(new URL('src/'+file,out));
+console.log(`Built dist/; backend ${config.supabaseUrl ? 'configured' : 'not configured (setup screen, no mock data)'}.`);
