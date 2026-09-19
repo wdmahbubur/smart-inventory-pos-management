@@ -1,9 +1,9 @@
 import {decimalMoney} from './money';
-export interface CsvColumn {key:string;label:string;kind?:'text'|'number'|'money'}
+export interface CsvColumn{key:string;label:string;kind?:'text'|'number'|'money'}
 export function csvText(value:unknown):string{
  let text=value==null?'':String(value);
- // Neutralize formula-leading content even behind whitespace/control characters.
- if(/^[\s\u0000-\u001f]*[=+\-@]/u.test(text)||/^[\t\r\n]/u.test(text))text="'"+text;
+ let position=0;while(position<text.length&&(text.charCodeAt(position)<=32||/\s/u.test(text[position])))position++;
+ if(['=','+','-','@'].includes(text[position]??'')||['\t','\r','\n'].includes(text[0]??''))text="'"+text;
  return '"'+text.replaceAll('"','""')+'"';
 }
 function cell(value:unknown,kind:CsvColumn['kind']){if(value==null)return '';if(kind==='money')return decimalMoney(String(value));if(kind==='number'){const text=String(value);if(!/^-?\d+(?:\.\d+)?$/.test(text))throw new Error('Invalid numeric export field.');return text;}return csvText(value);}
