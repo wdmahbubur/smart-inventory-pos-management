@@ -49,6 +49,20 @@ try{
  await measure('twenty_line_receipt',1500,()=>rpc(c.user,'write_purchase',[purchase(c.supplier,items),uid(),true]));
  const cart={items:products.slice(0,20).flatMap(p=>sale(p.id).items),discount_paisa:'0',cash_received_paisa:'200000'};
  await measure('twenty_line_checkout',1500,()=>rpc(c.user,'complete_sale',[cart,uid()]));
+ if(process.env.PERFORMANCE_CHECK_EXPORT_LIMIT==='1'){
+  // Grow only this isolated synthetic store after recording the required 50k timings.
+  const current=await rpc<{source_count:number}>(c.user,'get_report',['purchases',{from:today(),to:today()},false]);
+  let remaining=100_001-current.source_count,offset=0;
+  while(remaining>0){
+   const size=Math.min(100,remaining);
+   const more=Array.from({length:size},(_,i)=>({product_id:products[(offset+i)%count].id,quantity:1,unit_cost_paisa:'7000'}));
+   await rpc(c.user,'write_purchase',[purchase(c.supplier,more),uid(),true]);remaining-=size;offset+=size;
+  }
+  const capped=await rpc<{source_count:number}>(c.user,'get_report',['purchases',{from:today(),to:today()},false]);
+  assert.equal(capped.source_count,100_001);
+  await assert.rejects(rpc(c.user,'get_report',['purchases',{from:today(),to:today()},true]),/EXPORT_ROW_LIMIT/);
+  results.export_limit_check={source_count:100_001,result:'passed: authenticated report RPC rejects the complete export with EXPORT_ROW_LIMIT; no truncated success'};
+ }
  const bad=await pool.query(`select b.product_id from public.inventory_balances b join public.stores s on s.id=b.store_id left join public.stock_movements m on m.product_id=b.product_id where s.owner_user_id=$1 group by b.product_id,b.quantity having b.quantity<>coalesce(sum(m.quantity_delta),0)`,[c.user]);
  assert.equal(bad.rowCount,0);
  const broken=await pool.query(`select * from (select m.quantity_before,lag(m.quantity_after,1,0) over(partition by m.product_id order by m.sequence) previous from public.stock_movements m join public.stores s on s.id=m.store_id where s.owner_user_id=$1) x where quantity_before<>previous`,[c.user]);
