@@ -2,7 +2,7 @@ name: Application verification
 on:
   push:
     branches: [master, feat/complete-inventory-application]
-    paths: ['src/**','supabase/**','tests/**','scripts/**','package*.json','playwright.config.ts','next.config.ts','tsconfig.json','eslint.config.*','vercel.json','.nvmrc','.github/workflows/ci.yml']
+    paths: ['src/**','supabase/**','tests/**','scripts/**','docs/**','package*.json','playwright.config.ts','next.config.ts','tsconfig.json','eslint.config.*','vercel.json','.nvmrc','.env.example','README.md','IMPLEMENTATION_STATUS.md','TEST_RESULTS.md','VISUAL_QA.md','.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,6 +31,7 @@ jobs:
     env:
       DATABASE_TEST_URL: postgresql://postgres:postgres@127.0.0.1:54322/smart_inventory_test
       NEXT_TELEMETRY_DISABLED: '1'
+      PERFORMANCE_CHECK_EXPORT_LIMIT: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,17 +54,15 @@ jobs:
         run: |
           set -euo pipefail
           npm run verify 2>&1 | tee test-results/application.txt
-      - name: Package offline development runtime
-        if: always()
+      - name: Package tracked application source without dependencies or secrets
         run: |
-          set -euo pipefail
-          tar -czf /tmp/inventory-offline-runtime.tar.gz src tests scripts supabase node_modules package.json package-lock.json tsconfig.json next.config.ts eslint.config.mjs 2>/dev/null || tar -czf /tmp/inventory-offline-runtime.tar.gz src tests scripts supabase node_modules package.json package-lock.json tsconfig.json next.config.ts eslint.config.js
+          git archive --format=zip --output=/tmp/smart-inventory-source.zip HEAD -- src tests scripts supabase docs .github .env.example .gitignore .nvmrc package.json package-lock.json next-env.d.ts next.config.ts tsconfig.json eslint.config.mjs playwright.config.ts README.md IMPLEMENTATION_STATUS.md TEST_RESULTS.md VISUAL_QA.md vercel.json
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: offline-runtime-${{ github.sha }}
-          path: /tmp/inventory-offline-runtime.tar.gz
-          retention-days: 1
+          name: source-handoff-${{ github.sha }}
+          path: /tmp/smart-inventory-source.zip
+          retention-days: 14
+          compression-level: 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
