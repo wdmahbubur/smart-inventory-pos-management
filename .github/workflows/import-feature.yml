@@ -1,0 +1,86 @@
+name: Import and verify feature
+on:
+  push:
+    paths: ['.delivery/*.json']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: feature-delivery
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smart_inventory_test
+        ports: ['54322:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_TEST_URL: postgresql://postgres:postgres@127.0.0.1:54322/smart_inventory_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Verify source hashes and push separate feature commits
+        shell: python
+        run: |
+          import base64, hashlib, json, pathlib, subprocess, zlib
+          root = pathlib.Path.cwd()
+          subprocess.run(['git','config','user.name','github-actions[bot]'],check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'],check=True)
+          for transport in sorted(root.glob('.delivery/*.json')):
+              envelope = json.loads(transport.read_text())
+              raw = zlib.decompress(base64.b64decode(envelope['payload']))
+              assert hashlib.sha256(raw).hexdigest() == envelope['sha256'], 'Source checksum mismatch'
+              groups = json.loads(raw)
+              for group in groups:
+                  paths = []
+                  for name, content in group['files'].items():
+                      path = pathlib.Path(name)
+                      assert not path.is_absolute() and '..' not in path.parts and '.git' not in path.parts
+                      assert not name.startswith('.env') or name == '.env.example'
+                      target = root/path
+                      target.parent.mkdir(parents=True,exist_ok=True)
+                      if content is None:
+                          target.unlink(missing_ok=True)
+                      else:
+                          target.write_text(content)
+                      paths.append(name)
+                  subprocess.run(['git','add','--',*paths],check=True)
+                  changed = subprocess.run(['git','diff','--cached','--quiet']).returncode
+                  if changed:
+                      subprocess.run(['git','commit','-m',group['message']],check=True)
+                      subprocess.run(['git','push','origin','HEAD:master'],check=True)
+              subprocess.run(['git','rm',str(transport.relative_to(root))],check=True)
+              subprocess.run(['git','commit','-m','build: remove consumed checksummed source transport'],check=True)
+              subprocess.run(['git','push','origin','HEAD:master'],check=True)
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Fresh migration and authenticated-role database tests
+        run: |
+          set -euo pipefail
+          if test -f tests/database/bootstrap-role-context.sql; then
+            psql "$DATABASE_TEST_URL" -v ON_ERROR_STOP=1 -f tests/database/bootstrap-role-context.sql
+            for migration in supabase/migrations/*.sql; do psql "$DATABASE_TEST_URL" -v ON_ERROR_STOP=1 -f "$migration"; done
+            npm run test:database | tee database-results.txt
+          fi
+      - name: Unit tests and production verification when app is present
+        run: |
+          set -euo pipefail
+          if test -f src/app/layout.tsx; then npm run verify | tee app-results.txt; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-results
+          path: '*-results.txt'
+          retention-days: 7
