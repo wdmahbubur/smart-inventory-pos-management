@@ -16,7 +16,6 @@ jobs:
           mkdir tooling
           docker create --name auth supabase/gotrue:v2.196.0
           docker export auth > auth.tar
-          tar -tf auth.tar | grep -E '(^|/)(auth|gotrue)$|migrations' | head -30 || true
           auth_path=$(tar -tf auth.tar | grep -E '(^|/)auth$' | head -1)
           test -n "$auth_path"
           docker cp "auth:/$auth_path" tooling/auth
