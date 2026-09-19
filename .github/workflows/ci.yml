@@ -1,7 +1,7 @@
 name: Application verification
 on:
   push:
-    branches: [master]
+    branches: [master, feat/complete-inventory-application]
     paths: ['src/**','supabase/**','tests/**','scripts/**','package*.json','playwright.config.ts','.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
@@ -23,7 +23,11 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: smart_inventory_test
         ports: ['54322:5432']
-        options: --health-cmd 'pg_isready -U postgres' --health-interval 5s --health-timeout 5s --health-retries 10
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_TEST_URL: postgresql://postgres:postgres@127.0.0.1:54322/smart_inventory_test
       NEXT_TELEMETRY_DISABLED: '1'
@@ -42,7 +46,6 @@ jobs:
           for file in supabase/migrations/*.sql; do psql "$DATABASE_TEST_URL" -v ON_ERROR_STOP=1 -f "$file"; done
           npm run test:database 2>&1 | tee test-results/database.txt
       - name: Typecheck, lint, unit tests and production build
-        if: hashFiles('src/app/layout.tsx') != ''
         run: |
           set -euo pipefail
           npm run verify 2>&1 | tee test-results/application.txt
