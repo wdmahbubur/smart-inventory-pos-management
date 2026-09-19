@@ -2,7 +2,7 @@ name: Application verification
 on:
   push:
     branches: [master, feat/complete-inventory-application]
-    paths: ['src/**','supabase/**','tests/**','scripts/**','package*.json','playwright.config.ts','.github/workflows/ci.yml']
+    paths: ['src/**','supabase/**','tests/**','scripts/**','package*.json','playwright.config.ts','next.config.ts','tsconfig.json','eslint.config.*','vercel.json','.nvmrc','.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
