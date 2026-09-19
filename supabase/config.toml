@@ -1,0 +1,41 @@
+# Disposable local development stack. Never link this configuration to an unrelated project.
+project_id = "smart-inventory-pos-local"
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+[db.seed]
+enabled = false
+[studio]
+enabled = false
+[inbucket]
+enabled = true
+port = 54324
+[storage]
+enabled = false
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://127.0.0.1:3000/auth/callback?next=/reset-password"]
+jwt_expiry = 3600
+enable_signup = true
+minimum_password_length = 8
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+double_confirm_changes = true
+secure_password_change = false
+max_frequency = "1s"
+[auth.rate_limit]
+email_sent = 100
+sign_in_sign_ups = 100
+[analytics]
+enabled = false
+[edge_runtime]
+enabled = false
