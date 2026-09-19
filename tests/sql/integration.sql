@@ -20,7 +20,7 @@ select si_test.fails(format('select public.si_mutate(%L,''product_save'',%L,gen_
 select public.si_mutate(:'org_a','product_save','{"name":"Rice","sku":"RICE","price_minor":300,"reorder_level":3}',gen_random_uuid())->>'id' as product \gset
 select public.si_mutate(:'org_a','product_save','{"name":"Empty","sku":"EMPTY","price_minor":100}',gen_random_uuid())->>'id' as empty_product \gset
 select si_test.ok((select stock=0 from public.si_products where id=:'product'),'new products start at zero stock');
-select si_test.fails(format('update public.si_products set stock=99 where id=%L',:'product),'%permission denied%');
+select si_test.fails(format('update public.si_products set stock=99 where id=%L',:'product'),'%permission denied%');
 select public.si_mutate(:'org_a','contact_save','{"kind":"supplier","name":"Supplier"}',gen_random_uuid())->>'id' as supplier \gset
 select public.si_mutate(:'org_a','contact_save','{"kind":"customer","name":"Customer"}',gen_random_uuid())->>'id' as customer \gset
 select public.si_mutate(:'org_a','purchase_save',jsonb_build_object('supplier_id',:'supplier','paid_minor',500,'lines',jsonb_build_array(jsonb_build_object('product_id',:'product','quantity',10,'unit_cost_minor',100))),gen_random_uuid())->>'id' as purchase \gset
