@@ -1,0 +1,39 @@
+name: Workspace snapshot
+on:
+  push:
+    paths: ['.github/workflows/workspace-snapshot.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: npm ci
+      - name: Collect development dependencies and current source
+        run: |
+          tar -czf /tmp/workspace.tgz --exclude=.git .
+          mv /tmp/workspace.tgz workspace.tgz
+      - name: Collect isolated PostgreSQL 17 binaries
+        run: |
+          docker run --name pgtools --entrypoint bash postgres:17-bookworm -c '
+            mkdir -p /out/deps
+            ldd /usr/lib/postgresql/17/bin/* /usr/lib/postgresql/17/lib/pgcrypto.so 2>/dev/null | awk "{print \$3}" | grep "^/" | sort -u | grep -Ev "/(libc|libm|libpthread|libdl|librt|libresolv)\.so|ld-linux" | xargs -r cp -L -t /out/deps
+            cp -a /usr/lib/postgresql/17 /out/postgresql
+            cp -a /usr/share/postgresql/17 /out/share
+            cd /out && tar -czf tooling.tgz deps postgresql share
+          '
+          docker cp pgtools:/out/tooling.tgz postgres-tooling.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-snapshot
+          path: |
+            workspace.tgz
+            postgres-tooling.tgz
+          retention-days: 2
+          compression-level: 0
