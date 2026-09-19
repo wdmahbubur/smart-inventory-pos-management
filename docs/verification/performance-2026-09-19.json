@@ -2,7 +2,7 @@
   "environment": "Isolated PostgreSQL over localhost; authenticated SQL role/JWT contexts. Not production HTTP or deployed same-region latency.",
   "node": "v22.16.0",
   "platform": "linux",
-  "recorded_at": "2026-09-19T17:20:58.221Z",
+  "recorded_at": "2026-09-19T17:47:30.785Z",
   "dataset": {
     "active_products": 1200,
     "received_source_lines": 50000,
@@ -10,13 +10,59 @@
   },
   "samples": 30,
   "full_dataset_reconciliation": "passed: 1,200 inventory export rows, 50,000 received source export rows, exact totals and all catalog pages",
-  "setup_ms": 23762.29,
-  "catalog_page": {"min_ms":7.38,"p50_ms":7.67,"p95_ms":10.26,"max_ms":11.85,"target_ms":800,"met_in_this_environment":true},
-  "workspace_aggregates": {"min_ms":12.59,"p50_ms":13.52,"p95_ms":16.42,"max_ms":16.77,"target_ms":800,"met_in_this_environment":true},
-  "purchase_report_aggregate": {"min_ms":75.52,"p50_ms":78.76,"p95_ms":96.19,"max_ms":118.88,"target_ms":800,"met_in_this_environment":true},
-  "movement_page": {"min_ms":138.33,"p50_ms":252.94,"p95_ms":331.54,"max_ms":332.73,"target_ms":800,"met_in_this_environment":true},
-  "twenty_line_receipt": {"min_ms":7.69,"p50_ms":8.77,"p95_ms":10.8,"max_ms":11.23,"target_ms":1500,"met_in_this_environment":true},
-  "twenty_line_checkout": {"min_ms":10,"p50_ms":10.98,"p95_ms":14.91,"max_ms":14.93,"target_ms":1500,"met_in_this_environment":true},
+  "setup_ms": 32269.51,
+  "catalog_page": {
+    "min_ms": 11.82,
+    "p50_ms": 11.98,
+    "p95_ms": 12.16,
+    "max_ms": 12.21,
+    "target_ms": 800,
+    "met_in_this_environment": true
+  },
+  "workspace_aggregates": {
+    "min_ms": 15.81,
+    "p50_ms": 16.18,
+    "p95_ms": 16.94,
+    "max_ms": 17.09,
+    "target_ms": 800,
+    "met_in_this_environment": true
+  },
+  "purchase_report_aggregate": {
+    "min_ms": 97.98,
+    "p50_ms": 99.38,
+    "p95_ms": 102.04,
+    "max_ms": 102.53,
+    "target_ms": 800,
+    "met_in_this_environment": true
+  },
+  "movement_page": {
+    "min_ms": 97.5,
+    "p50_ms": 260.38,
+    "p95_ms": 270.59,
+    "max_ms": 272.61,
+    "target_ms": 800,
+    "met_in_this_environment": true
+  },
+  "twenty_line_receipt": {
+    "min_ms": 10.58,
+    "p50_ms": 11.01,
+    "p95_ms": 11.71,
+    "max_ms": 11.74,
+    "target_ms": 1500,
+    "met_in_this_environment": true
+  },
+  "twenty_line_checkout": {
+    "min_ms": 12.81,
+    "p50_ms": 13.27,
+    "p95_ms": 14.25,
+    "max_ms": 14.3,
+    "target_ms": 1500,
+    "met_in_this_environment": true
+  },
+  "export_limit_check": {
+    "source_count": 100001,
+    "result": "passed: authenticated report RPC rejects the complete export with EXPORT_ROW_LIMIT; no truncated success"
+  },
   "ledger_after_benchmark": "passed: every balance and before/after chain reconstructs from zero",
   "postgres": "PostgreSQL 17.11 (Debian 17.11-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit"
 }
