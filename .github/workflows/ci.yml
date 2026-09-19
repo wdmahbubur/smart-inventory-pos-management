@@ -13,6 +13,9 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     services:
       postgres:
         image: postgres:17-bookworm
@@ -20,7 +23,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: smart_inventory_test
         ports: ['54322:5432']
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        options: --health-cmd 'pg_isready -U postgres' --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_TEST_URL: postgresql://postgres:postgres@127.0.0.1:54322/smart_inventory_test
       NEXT_TELEMETRY_DISABLED: '1'
@@ -32,7 +35,6 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Fresh migrations and database-role tests
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p test-results
@@ -41,7 +43,9 @@ jobs:
           npm run test:database 2>&1 | tee test-results/database.txt
       - name: Typecheck, lint, unit tests and production build
         if: hashFiles('src/app/layout.tsx') != ''
-        run: npm run verify 2>&1 | tee test-results/application.txt
+        run: |
+          set -euo pipefail
+          npm run verify 2>&1 | tee test-results/application.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
