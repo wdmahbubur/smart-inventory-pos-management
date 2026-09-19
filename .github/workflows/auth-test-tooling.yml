@@ -1,0 +1,35 @@
+name: Supabase Auth test tooling
+on:
+  push:
+    paths: ['.github/workflows/auth-test-tooling.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Extract official Supabase Auth and PostgREST binaries
+        run: |
+          set -euo pipefail
+          mkdir tooling
+          docker create --name auth supabase/gotrue:v2.196.0
+          docker export auth > auth.tar
+          tar -tf auth.tar | grep -E '(^|/)(auth|gotrue)$|migrations' | head -30 || true
+          auth_path=$(tar -tf auth.tar | grep -E '(^|/)auth$' | head -1)
+          test -n "$auth_path"
+          docker cp "auth:/$auth_path" tooling/auth
+          docker cp auth:/usr/local/etc/auth/migrations tooling/migrations || true
+          docker create --name rest postgrest/postgrest:v14.17
+          docker export rest > rest.tar
+          rest_path=$(tar -tf rest.tar | grep -E '(^|/)postgrest$' | head -1)
+          test -n "$rest_path"
+          docker cp "rest:/$rest_path" tooling/postgrest
+          chmod +x tooling/auth tooling/postgrest
+          tar -czf supabase-auth-tooling.tgz -C tooling .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supabase-auth-tooling
+          path: supabase-auth-tooling.tgz
+          retention-days: 2
