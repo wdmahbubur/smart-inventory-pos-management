@@ -1,0 +1,5 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {csvText,serializeCsv,reportColumns} from '../../src/lib/csv';
+test('AT-47: CSV neutralizes formula-leading text while preserving numeric fields',()=>{for(const text of ['=1+1','+SUM(A1:A2)','-2+2','@cmd','  =evil','\t=evil'])assert.ok(csvText(text).startsWith('"\''));assert.equal(csvText('Milk, "fresh"\ncarton'),'"Milk, ""fresh""\ncarton"');const csv=serializeCsv([{key:'text',label:'Text'},{key:'delta',label:'Delta',kind:'number'},{key:'amount',label:'BDT',kind:'money'}],[{text:'=bad',delta:-2,amount:'7025'}]);assert.ok(csv.includes('"\'=bad",-2,70.25'));assert.ok(csv.startsWith('\ufeff'));});
+test('sales export retains null repeated discount rather than counting each line',()=>{const csv=serializeCsv(reportColumns.sales,[{quantity:2,unit_price_paisa:'10000',line_gross_paisa:'20000',order_discount_paisa:'2000'},{quantity:3,unit_price_paisa:'5000',line_gross_paisa:'15000',order_discount_paisa:null}]);assert.ok(csv.includes(',20.00\r\n'));assert.ok(csv.endsWith(',150.00,\r\n'));});
