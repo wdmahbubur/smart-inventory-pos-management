@@ -1,0 +1,1 @@
+export default function Loading(){return <div role="status" aria-label="Loading your store"><div className="skeleton heading"/><div className="stats">{[1,2,3,4].map(n=><div key={n} className="skeleton"/>)}</div><div className="skeleton" style={{height:320}}/><span className="sr-only">Loading your store data…</span></div>}

@@ -1,0 +1,8 @@
+import pg from 'pg';
+import {readdir,readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+const url=process.env.DATABASE_URL;
+if(!url)throw new Error('Set DATABASE_URL for the dedicated development database. Never put it in source control.');
+if(!['localhost','127.0.0.1'].includes(new URL(url).hostname)&&process.env.ALLOW_REMOTE_MIGRATIONS!=='I_HAVE_CONFIRMED_THE_DEDICATED_PROJECT')throw new Error('Remote migrations require explicit confirmation of the dedicated target. Set ALLOW_REMOTE_MIGRATIONS=I_HAVE_CONFIRMED_THE_DEDICATED_PROJECT.');
+const client=new pg.Client({connectionString:url});await client.connect();
+try{await client.query('create schema if not exists private');await client.query('create table if not exists private.app_migrations(name text primary key,sha256 text not null,applied_at timestamptz not null default now())');for(const file of (await readdir('supabase/migrations')).filter(n=>n.endsWith('.sql')).sort()){const sql=await readFile(`supabase/migrations/${file}`,'utf8');const hash=createHash('sha256').update(sql).digest('hex');const existing=await client.query('select sha256 from private.app_migrations where name=$1',[file]);if(existing.rowCount){if(existing.rows[0].sha256!==hash)throw new Error(`Previously applied migration changed: ${file}`);continue;}await client.query('begin');try{await client.query(sql);await client.query('insert into private.app_migrations(name,sha256) values($1,$2)',[file,hash]);await client.query('commit');console.log(`Applied ${file}`);}catch(error){await client.query('rollback');throw error;}}}finally{await client.end();}
