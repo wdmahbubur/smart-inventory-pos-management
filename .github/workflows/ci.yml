@@ -1,0 +1,50 @@
+name: Application verification
+on:
+  push:
+    branches: [master]
+    paths: ['src/**','supabase/**','tests/**','scripts/**','package*.json','playwright.config.ts','.github/workflows/ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: application-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smart_inventory_test
+        ports: ['54322:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_TEST_URL: postgresql://postgres:postgres@127.0.0.1:54322/smart_inventory_test
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Fresh migrations and database-role tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          psql "$DATABASE_TEST_URL" -v ON_ERROR_STOP=1 -f tests/database/bootstrap-role-context.sql
+          for file in supabase/migrations/*.sql; do psql "$DATABASE_TEST_URL" -v ON_ERROR_STOP=1 -f "$file"; done
+          npm run test:database 2>&1 | tee test-results/database.txt
+      - name: Typecheck, lint, unit tests and production build
+        if: hashFiles('src/app/layout.tsx') != ''
+        run: npm run verify 2>&1 | tee test-results/application.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-${{ github.sha }}
+          path: test-results
+          retention-days: 14
