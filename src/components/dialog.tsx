@@ -13,6 +13,7 @@ export function Dialog({open,onClose,title,children,className=''}:{open:boolean;
   if(!dialog||!open)return;
   const trigger=document.activeElement instanceof HTMLElement?document.activeElement:null;
   dialog.showModal();
+  dialog.querySelector<HTMLElement>('input:not([disabled]):not([type=hidden]),textarea:not([disabled]),select:not([disabled]),[data-autofocus]')?.focus();
   return()=>{
    dialog.close();
    if(trigger?.isConnected)trigger.focus();

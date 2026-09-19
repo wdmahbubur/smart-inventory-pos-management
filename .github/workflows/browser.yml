@@ -1,8 +1,8 @@
 name: Supabase browser verification
 on:
   push:
-    branches: [feat/complete-inventory-application]
-    paths: ['.github/workflows/browser.yml','playwright.config.ts','scripts/seed.ts','scripts/prepare-browser-fixtures.ts','tests/e2e/**']
+    branches: [master, feat/complete-inventory-application]
+    paths: ['src/**','supabase/**','package*.json','.github/workflows/browser.yml','playwright.config.ts','scripts/**','tests/e2e/**']
   workflow_dispatch:
 permissions:
   contents: read
