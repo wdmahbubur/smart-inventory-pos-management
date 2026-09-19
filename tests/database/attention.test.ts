@@ -1,0 +1,5 @@
+import {test,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {pool,base,product,rpc,uid,purchase} from './helpers';
+after(()=>pool.end());
+test('attention paging orders out-of-stock before low-stock and preserves minimum-zero shortage',async()=>{const c=await base();const a=await product(c,'ATT-A'),z=await product(c,'ATT-Z');await rpc(c.user,'catalog_mutate',['product','save',{...a.payload,id:a.id,expected_version:a.version,name:'A low product',minimum_stock:5},uid()]);await rpc(c.user,'catalog_mutate',['product','save',{...z.payload,id:z.id,expected_version:z.version,name:'Z zero minimum',minimum_stock:0},uid()]);await rpc(c.user,'write_purchase',[purchase(c.supplier,[{product_id:a.id,quantity:1,unit_cost_paisa:'7000'}]),uid(),true]);const result=await rpc<{rows:{id:string;shortage:number}[];low_stock:number;out_of_stock:number}>(c.user,'get_low_stock',[{}]);assert.equal(result.out_of_stock,1);assert.equal(result.low_stock,1);assert.equal(result.rows[0].id,z.id);assert.equal(result.rows[0].shortage,0);assert.equal(result.rows[1].shortage,4);});
