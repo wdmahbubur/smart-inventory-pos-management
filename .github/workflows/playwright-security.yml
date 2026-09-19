@@ -1,0 +1,33 @@
+name: Playwright security update
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/playwright-security.yml']
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - run: npm install --save-dev --save-exact @playwright/test@1.63.0 --ignore-scripts
+      - run: npm audit --audit-level=high
+      - name: Commit the audited dependency and lockfile
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m 'fix(security): pin Playwright 1.63.0 and audited lockfile'
+          git push origin HEAD:master
+      - run: tar -czf playwright-patch.tgz node_modules/playwright node_modules/playwright-core node_modules/@playwright/test package-lock.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-security-patch
+          path: playwright-patch.tgz
+          retention-days: 2
