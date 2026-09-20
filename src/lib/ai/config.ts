@@ -1,6 +1,7 @@
 import {AppError} from '../errors';
 
 export type AIProviderName='gemini'|'openrouter';
+// Reviewed OpenRouter free-route model; the API key remains a server-only runtime secret.
 export const DEFAULT_OPENROUTER_MODEL='nvidia/nemotron-3-ultra-550b-a55b:free';
 
 export interface AIConfig {
@@ -23,7 +24,8 @@ export function readAIConfig(env:Record<string,string|undefined>):AIConfig{
  if(provider==='openrouter'){
   key=env.OPENROUTER_API_KEY;
   model=env.OPENROUTER_TEXT_MODEL??DEFAULT_OPENROUTER_MODEL;
-  if(!key||!openRouterModel.test(model))throw new AppError('AI_NOT_CONFIGURED');
+  if(!key)throw new AppError('OPENROUTER_NOT_CONFIGURED');
+  if(!openRouterModel.test(model))throw new AppError('AI_NOT_CONFIGURED');
  }else if(provider==='gemini'){
   key=env.GEMINI_API_KEY;
   model=env.GEMINI_TEXT_MODEL;
