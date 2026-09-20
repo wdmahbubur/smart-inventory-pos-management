@@ -53,7 +53,7 @@ test('OpenRouter adapter forces one grounded tool call, retries transient errors
 test('OpenRouter adapter rejects free-form output and reports timeout without an infinite retry',async()=>{
  const ctx=context();
  const invalid=new OpenRouterProvider('nvidia/nemotron-3-ultra-550b-a55b:free','key',1500,async()=>Response.json({choices:[{finish_reason:'stop',message:{content:'{}'}}]}));
- await assert.rejects(invalid.generateInventoryInsights(facts,'bn',ctx),/invalid/i);
+ await assert.rejects(invalid.generateInventoryInsights(facts,'bn',ctx),/could not be grounded/i);
  const controller=new AbortController();controller.abort();let calls=0;
  const timed=new OpenRouterProvider('nvidia/nemotron-3-ultra-550b-a55b:free','key',1500,async()=>{calls++;throw new DOMException('Aborted','AbortError');});
  await assert.rejects(timed.generateInventoryInsights(facts,'en',{...context(),signal:controller.signal}),/timed out/i);
