@@ -1,0 +1,33 @@
+name: Deployment access preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/deployment-preflight.yml']
+permissions:
+  contents: read
+jobs:
+  access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Report configuration availability only
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only task-specific presence flags are reported. Never echo secret values.
+          echo '## Deployment configuration' >> "$GITHUB_STEP_SUMMARY"
+          for name in VERCEL_TOKEN SUPABASE_ACCESS_TOKEN GEMINI_API_KEY; do
+            if [[ -n "${!name:-}" ]]; then
+              printf '%s: configured\n' "$name"
+              printf -- '- %s: configured\n' "$name" >> "$GITHUB_STEP_SUMMARY"
+            else
+              printf '%s: not configured\n' "$name"
+              printf -- '- %s: not configured\n' "$name" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          echo 'This preflight does not deploy or change Supabase Auth configuration.' >> "$GITHUB_STEP_SUMMARY"
