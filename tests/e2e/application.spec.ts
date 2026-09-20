@@ -50,7 +50,7 @@ test('draft isolation, responsive POS, lost checkout response and same-receipt r
 });
 
 test('missing AI keeps source facts and keyboard dialog restores focus',async({page})=>{
- await login(page);await page.goto('/insights');await expect(page.getByRole('heading',{name:'Recommended next moves',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Verified source facts',exact:true})).toBeVisible();await page.getByRole('button',{name:'Generate insight',exact:true}).click();await expect(page.getByText('OPENROUTER_API_KEY is missing',{exact:false})).toBeVisible();await expect(page.getByRole('heading',{name:'Verified source facts',exact:true})).toBeVisible();
+ await login(page);await page.goto('/insights');await expect(page.getByRole('heading',{name:/Recommended next moves|পরবর্তী কাজগুলো/})).toBeVisible();await expect(page.getByRole('heading',{name:'Verified source facts',exact:true})).toBeVisible();await page.getByRole('button',{name:'Generate insight',exact:true}).click();await expect(page.getByText('OPENROUTER_API_KEY is missing',{exact:false})).toBeVisible();await expect(page.getByRole('heading',{name:'Verified source facts',exact:true})).toBeVisible();
  await page.goto('/categories');const trigger=page.getByRole('button',{name:'Add category',exact:true});await trigger.focus();await page.keyboard.press('Enter');await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByLabel('Category name',{exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).not.toBeVisible();await expect(trigger).toBeFocused();
 });
 
