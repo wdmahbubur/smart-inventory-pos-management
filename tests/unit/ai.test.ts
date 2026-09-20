@@ -11,7 +11,7 @@ import type {StoredInsight,RequestContext} from '../../src/lib/ai/contracts';
 const facts=unitFacts();
 function context():RequestContext{return {requestId:crypto.randomUUID(),promptVersion:'inventory-insights-v1',signal:new AbortController().signal,policy:buildPolicy(facts,'bn')};}
 test('AT-49: missing or unknown AI configuration never falls back to fabricated output',()=>{
- assert.throws(()=>readAIConfig({}),/not configured/i);
+ assert.throws(()=>readAIConfig({}),/OPENROUTER_API_KEY is missing/i);
  assert.throws(()=>readAIConfig({AI_PROVIDER:'test'}),/no installed adapter/i);
  assert.throws(()=>readAIConfig({AI_PROVIDER:'unknown',GEMINI_API_KEY:'x',GEMINI_TEXT_MODEL:'gemini-2.5-flash'}),/no installed adapter/i);
  const openrouter=readAIConfig({OPENROUTER_API_KEY:'test-key'});
