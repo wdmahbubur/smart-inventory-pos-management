@@ -17,6 +17,12 @@ test('AT-49: missing or unknown AI configuration never falls back to fabricated 
  const openrouter=readAIConfig({OPENROUTER_API_KEY:'test-key'});
  assert.equal(openrouter.provider,'openrouter');
  assert.equal(openrouter.model,'nvidia/nemotron-3-ultra-550b-a55b:free');
+ const staleGemini=readAIConfig({AI_PROVIDER:'gemini',OPENROUTER_API_KEY:'  test-key  ',OPENROUTER_TEXT_MODEL:'"nvidia/nemotron-3-ultra-550b-a55b:free"'});
+ assert.equal(staleGemini.provider,'openrouter');
+ assert.equal(staleGemini.key,'test-key');
+ assert.equal(staleGemini.model,'nvidia/nemotron-3-ultra-550b-a55b:free');
+ const explicitGemini=readAIConfig({AI_PROVIDER:'gemini',GEMINI_API_KEY:'g-key',GEMINI_TEXT_MODEL:'gemini-2.5-flash',OPENROUTER_API_KEY:'o-key'});
+ assert.equal(explicitGemini.provider,'gemini');
  assert.throws(()=>readAIConfig({AI_PROVIDER:'openrouter',OPENROUTER_API_KEY:'x',OPENROUTER_TEXT_MODEL:'bad model'}),/configuration is incomplete/i);
 });
 test('AT-50: hallucinated numbers, fact IDs, HTML, contradictions and oversized output are rejected',()=>{const policy=buildPolicy(facts,'en');const valid=expandSelection({summary_key:'overview',section_keys:['stock','activity']},policy);assert.equal(validateOutput(valid,policy).summary_key,'overview');for(const value of [{...valid,summary:'There are 999 products.'},{...valid,summary:'<script>bad</script>'},{...valid,summary:'No product needs attention.'},{...valid,summary:'x'.repeat(17000)},{...valid,sections:[{...valid.sections[0],fact_ids:['arbitrary_sql']}]},{...valid,sections:[valid.sections[0],valid.sections[0]]}])assert.throws(()=>validateOutput(value,policy));assert.throws(()=>resolveFacts('{{unverified}}',policy,'en'));});
