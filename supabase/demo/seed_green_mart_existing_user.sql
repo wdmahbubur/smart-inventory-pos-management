@@ -37,8 +37,6 @@ begin
     true
   );
 
-  perform public.create_owner_store();
-
   select count(*)::integer into v_existing_products
   from public.products p
   join public.stores s on s.id=p.store_id
