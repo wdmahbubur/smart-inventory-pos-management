@@ -34,7 +34,7 @@ Full evidence, row counts, locations, restore precautions and migration-tool gui
 | M4, SCR-10–12 | Versioned drafts with no stock effect, atomic receipt, historical stock impact, immutable documents, idempotency and rollback protection. |
 | M5, SCR-13–15 | Responsive cash cart, exact integer-money calculations, price/stock/tender revalidation, order discount, receipts, last-unit concurrency and lost-response recovery. |
 | M6, SCR-05/16–21 | Consistent dashboard/stock facts, minimum-only replenishment, posting-date reports, complete aggregates/streamed CSV, Dhaka boundaries and formula-safe exports. |
-| M7, SCR-22 | Optional server-only Gemini adapter, provider-neutral contract, grounded outputs, durable lease/quota/cache, provenance and stale/error states. Test adapter/transport and database checks pass; no successful real provider call. |
+| M7, SCR-22 | Optional server-only OpenRouter (default) and Gemini adapters, provider-neutral contract, grounded outputs, durable lease/quota/cache, provenance and stale/error states. OpenRouter Nemotron transport/grounding tests are included; a successful live provider call is still a separate check. |
 | M8, AT-56–60 | Typecheck/lint/build, database tests, real Supabase browser tests, 132 route/viewport checks, desktop/mobile/print captures, setup and architecture/database/provider documentation. Exact parity and external release approval are not claimed. |
 
 These mappings do **not** assert every subcase of all 60 acceptance rows passed. See TEST_RESULTS.md and VISUAL_QA.md for exact evidence and open cases.
@@ -53,7 +53,7 @@ Feature pushes include dialog accessibility (`255f6d7`), scoped ledger validatio
 
 1. **Vercel authorization and publication:** add the two required Actions secrets and run the prepared workflow on master. No working live URL is claimed. The selected hosted database schema is ready.
 2. **Hosted Supabase integration:** the backup/archive/schema installation is complete and public Auth/anonymous-denial HTTP checks pass. Configure the production site/callback URLs through the release script and configure SMTP, then verify real hosted Auth and authenticated browser workflows. Unrelated TakaTrack data was not modified.
-3. **Gemini:** configure a server-side key/model securely and run the documented Bengali/English smoke test. Core operations and source facts work without AI; successful external generation is not verified.
+3. **AI provider:** configure `OPENROUTER_API_KEY` server-side and run the documented Bengali/English smoke test using `nvidia/nemotron-3-ultra-550b-a55b:free`. Core operations and source facts work without AI; successful external generation is not yet verified.
 4. **Visual/acceptance:** remaining panel/form composition and populated-state differences are recorded in VISUAL_QA.md. Exact pixel parity, Safari/Firefox, physical printers, every keyboard combination, hosted cache/secret auditing and deployed multi-instance latency remain unverified. Both unit and actual database coverage verify the 100,001-row export rejection.
 
 Do not mark the whole release complete from a green build alone. Never expose demo seeding, clock override, direct stock editing, service keys or a deterministic AI fallback in production.
