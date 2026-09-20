@@ -2,6 +2,7 @@ import {AppError} from '../../errors';
 import {buildPrompt} from '../prompt';
 import type {InventoryInsightProvider,InventoryFacts,Language,RequestContext} from '../contracts';
 
+// Nemotron's OpenRouter route supports tool calling; forced tool arguments carry the approved schema selection.
 const TOOL_NAME='select_inventory_insight';
 
 export class OpenRouterProvider implements InventoryInsightProvider{
