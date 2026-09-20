@@ -2,7 +2,7 @@ name: Application verification
 on:
   push:
     branches: [master, feat/complete-inventory-application]
-    paths: ['src/**','supabase/**','tests/**','scripts/**','docs/**','package*.json','playwright.config.ts','next.config.ts','tsconfig.json','eslint.config.*','vercel.json','.nvmrc','.env.example','README.md','IMPLEMENTATION_STATUS.md','TEST_RESULTS.md','VISUAL_QA.md','.github/workflows/ci.yml']
+    paths: ['src/**','supabase/**','tests/**','scripts/**','config/**','docs/**','package*.json','playwright.config.ts','next.config.ts','tsconfig.json','eslint.config.*','vercel.json','.nvmrc','.env.example','README.md','IMPLEMENTATION_STATUS.md','TEST_RESULTS.md','VISUAL_QA.md','.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -39,6 +39,11 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Deployment guards and mocked API orchestration
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          node --test tests/deployment/*.test.mjs 2>&1 | tee test-results/deployment-guards.txt
       - name: Fresh migrations and database-role tests
         run: |
           set -euo pipefail
@@ -56,7 +61,7 @@ jobs:
           npm run verify 2>&1 | tee test-results/application.txt
       - name: Package tracked application source without dependencies or secrets
         run: |
-          git archive --format=zip --output=/tmp/smart-inventory-source.zip HEAD -- src tests scripts supabase docs .github .env.example .gitignore .nvmrc package.json package-lock.json next-env.d.ts next.config.ts tsconfig.json eslint.config.mjs playwright.config.ts README.md IMPLEMENTATION_STATUS.md TEST_RESULTS.md VISUAL_QA.md vercel.json
+          git archive --format=zip --output=/tmp/smart-inventory-source.zip HEAD -- src tests scripts config supabase docs .github .env.example .gitignore .nvmrc package.json package-lock.json next-env.d.ts next.config.ts tsconfig.json eslint.config.mjs playwright.config.ts README.md IMPLEMENTATION_STATUS.md TEST_RESULTS.md VISUAL_QA.md vercel.json
       - uses: actions/upload-artifact@v4
         with:
           name: source-handoff-${{ github.sha }}
