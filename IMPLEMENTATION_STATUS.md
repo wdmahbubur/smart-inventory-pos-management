@@ -1,6 +1,16 @@
-# Implementation status — 19 September 2026
+# Implementation status — 20 September 2026
 
-**Default branch:** `master`. Implementation was pushed feature-by-feature on `feat/complete-inventory-application` and merged through **PR #1**. This is a functional application, not a static design bundle. It is **not yet a signed-off hosted release**: dedicated hosted data, Vercel deployment, a real Gemini smoke test and final reference-parity review remain open.
+**Default branch:** `master`. Implementation was pushed feature-by-feature on `feat/complete-inventory-application` and merged through **PR #1**. This is a functional application, not a static design bundle. The approved hosted Supabase schema is now installed and verified. It is **not yet a signed-off hosted release**: Vercel deployment, hosted Auth/browser verification, a real Gemini smoke test and final reference-parity review remain open.
+
+## Hosted database checkpoint — 20 September
+
+On the explicitly approved `inventory-management-v2` project (`galgetikfkyceqkaqdha`), retained all **70 legacy rows** in original archived tables and in separate verified in-database backup copies. Exact counts corrected the earlier table-list estimate of zero. Originals, eight foreign keys, indexes, five enum types, trigger function and sequence were preserved. Archive and backup API access is denied.
+
+Installed all **10 application source migrations**; verified **12 public tables with RLS**, 12 owner-read policies, blocked direct table writes, 17 authenticated/owner-checked RPC entrypoints and **35/35 normalized function-body matches** against source commit `a9a2e3442e0662b891c74b29e5c494b3531c06ea`. The hosted transaction-level smoke test passed 12 verification groups covering onboarding, catalog, zero stock, draft isolation, receipt/sale idempotency, oversell rejection, direct-write denial, immutable snapshots, reconciled reports/ledger/AI facts and two-owner isolation. All temporary test identities and business rows were rolled back. This is SQL-role verification, not hosted HTTP Auth/browser testing.
+
+Security Advisor reports no ERROR findings; 17 authenticated SECURITY DEFINER WARN notices and seven archive no-policy INFO notices remain and are documented. This is not a claim of a complete security audit. Backups are inside the same project, not offsite disaster-recovery backups.
+
+Full evidence, row counts, locations, restore precautions and migration-tool guidance: [Hosted cutover record](docs/deployments/2026-09-20-supabase-cutover.md). Future migrations for this target use `npm run db:migrate` with the recorded ten-source checksum baseline; do not run an unreconciled CLI db push/reset. No old password hashes or legacy stock balances were silently imported into the new Auth/ledger model.
 
 ## Implemented scope
 
@@ -29,8 +39,8 @@ Feature pushes include dialog accessibility (`255f6d7`), scoped ledger validatio
 
 ## Remaining release gates
 
-1. **Hosted Supabase:** choose a dedicated organization/project and approve any cost before creation/migrations. Configure production site/callback URLs and SMTP. Unrelated TakaTrack data was not modified.
-2. **Vercel:** the connected deploy action was attempted and returned JSON-RPC `-32602: Tool deploy_to_vercel not found`. No deployment ID/live URL was created. A working action or repository import, approved hosted database configuration and live workflow verification remain necessary.
+1. **Hosted Supabase integration:** the approved project's backup/archive/schema installation is complete. Configure the production site/callback URLs and SMTP, then verify real hosted Auth and browser workflows. Unrelated TakaTrack data was not modified.
+2. **Vercel:** the earlier connected deploy action returned JSON-RPC `-32602: Tool deploy_to_vercel not found`. No deployment ID/live URL is claimed. A working deployment action or repository import, environment configuration and live workflow verification remain necessary. The selected hosted database schema is now ready.
 3. **Gemini:** configure a server-side key/model securely and run the documented Bengali/English smoke test. Core operations and source facts work without AI; successful external generation is not verified.
 4. **Visual/acceptance:** remaining panel/form composition and populated-state differences are recorded in VISUAL_QA.md. Exact pixel parity, Safari/Firefox, physical printers, every keyboard combination, hosted cache/secret auditing and deployed multi-instance latency remain unverified. Both unit and actual database coverage verify the 100,001-row export rejection.
 
