@@ -35,7 +35,7 @@ Live read-only checks do not prove authenticated Purchase/POS workflows, email d
 
 Configure a real SMTP sender in Supabase for general public registration. The built-in sender is restricted and not a production email service. The script preserves SMTP settings and only records whether a custom host exists; it never disables email confirmation to make a test pass.
 
-AI remains optional. Add `GEMINI_API_KEY` as an Actions secret and `GEMINI_TEXT_MODEL` as a variable after checking model access. `gemini-3.8-flash` appears in Google's model documentation checked on 20 September 2026; that is not a successful provider call. When no replacement AI key is supplied, existing optional AI configuration is left untouched. Purchase/POS do not require Gemini.
+AI remains optional. For the requested production provider, add `OPENROUTER_API_KEY` as a server-side secret. `OPENROUTER_TEXT_MODEL` may be set to `nvidia/nemotron-3-ultra-550b-a55b:free`; the application also defaults to that reviewed slug. Gemini remains an explicitly supported alternative. Purchase/POS do not require either AI provider.
 
 ## Commands and test limits
 

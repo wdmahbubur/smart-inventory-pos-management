@@ -13,7 +13,7 @@ Browser / SSR page
 
 Explicit AI generation
   -> owner-scoped consistent fact snapshot + durable quota/lease
-  -> provider-neutral contract -> Gemini adapter (server only)
+  -> provider-neutral contract -> explicit OpenRouter/Gemini adapter (server only)
   -> strict grounding validation -> controlled persistence
   -> application-rendered values and stale/current provenance
 ```

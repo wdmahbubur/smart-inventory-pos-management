@@ -9,6 +9,7 @@ export class ReleaseError extends Error {
   constructor(code) { super(code); this.name = 'ReleaseError'; }
 }
 const reject = code => { throw new ReleaseError(code); };
+const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
 export function validateTarget(target, env) {
   if (target.repository !== 'wdmahbubur/smart-inventory-pos-management' ||
@@ -28,8 +29,11 @@ export function validateTarget(target, env) {
     try { claims = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString()); } catch { reject('PUBLIC_KEY_REQUIRED'); }
     if (claims.role !== 'anon' || claims.ref !== target.supabaseProjectRef) reject('PUBLIC_KEY_REQUIRED');
   }
-  // A model must be deliberately selected when enabling AI; no guessed vendor fallback.
-  if (env.GEMINI_API_KEY && !/^[a-zA-Z0-9._-]{1,100}$/.test(env.GEMINI_TEXT_MODEL ?? '')) reject('SET_GEMINI_TEXT_MODEL');
+  // AI keys are optional, server-only release inputs. OpenRouter defaults to the reviewed model slug.
+  if (env.OPENROUTER_API_KEY && !/^[a-zA-Z0-9._:/-]{1,160}$/.test(env.OPENROUTER_TEXT_MODEL ?? DEFAULT_OPENROUTER_MODEL))
+    reject('SET_OPENROUTER_TEXT_MODEL');
+  if (env.GEMINI_API_KEY && !/^[a-zA-Z0-9._-]{1,100}$/.test(env.GEMINI_TEXT_MODEL ?? ''))
+    reject('SET_GEMINI_TEXT_MODEL');
 }
 
 export function selectOrigin(domains, preferred) {
@@ -57,14 +61,21 @@ export function environmentValues(target, origin, env) {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: target.supabasePublishableKey,
     APP_URL: origin,
   };
-  if (env.GEMINI_API_KEY) Object.assign(values, {
+  if (env.OPENROUTER_API_KEY) Object.assign(values, {
+    AI_PROVIDER: 'openrouter',
+    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    OPENROUTER_TEXT_MODEL: env.OPENROUTER_TEXT_MODEL ?? DEFAULT_OPENROUTER_MODEL,
+    AI_REQUEST_TIMEOUT_MS: '30000', AI_MAX_REQUESTS_PER_HOUR: '10',
+    AI_MAX_OUTPUT_TOKENS: '1500', AI_PROMPT_VERSION: 'inventory-insights-v1',
+  });
+  else if (env.GEMINI_API_KEY) Object.assign(values, {
     AI_PROVIDER: 'gemini', GEMINI_API_KEY: env.GEMINI_API_KEY, GEMINI_TEXT_MODEL: env.GEMINI_TEXT_MODEL,
     AI_REQUEST_TIMEOUT_MS: '30000', AI_MAX_REQUESTS_PER_HOUR: '10',
     AI_MAX_OUTPUT_TOKENS: '1500', AI_PROMPT_VERSION: 'inventory-insights-v1',
   });
   // Do not erase existing optional AI configuration when no replacement is supplied.
   return Object.entries(values).map(([key, value]) => ({key, value,
-    type: key === 'GEMINI_API_KEY' ? 'encrypted' : 'plain', target: ['production']}));
+    type: ['OPENROUTER_API_KEY','GEMINI_API_KEY'].includes(key) ? 'encrypted' : 'plain', target: ['production']}));
 }
 
 export async function smokeHttp(origin, transport = globalThis.fetch) {
@@ -95,7 +106,7 @@ export async function smokeHttp(origin, transport = globalThis.fetch) {
 export async function deploy(target, env, {transport = globalThis.fetch, sleep = delay, record = async () => {}} = {}) {
   validateTarget(target, env);
   const report = {state: 'preflight', source_commit: env.GITHUB_SHA, target: target.supabaseProjectRef,
-    tests: [], remaining: ['Hosted authenticated Purchase/POS browser journey', 'Email delivery verification', 'Real Gemini generation'],
+    tests: [], remaining: ['Hosted authenticated Purchase/POS browser journey', 'Email delivery verification', 'Real configured AI generation'],
     database_changes: 'none; migrations and legacy archives are not touched'};
   await record(report);
   async function api(service, path, method = 'GET', body, allowMissing = false) {

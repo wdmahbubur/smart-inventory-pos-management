@@ -53,15 +53,17 @@ As an alternative for an **empty hosted Supabase database**, `DATABASE_URL=... A
 | `NEXT_PUBLIC_SUPABASE_URL` | Public build/runtime | Dedicated project's API URL. |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Public build/runtime | Publishable/anon client key; RLS and grants enforce security. |
 | `APP_URL` | Server | Exact approved origin, including local port. |
-| `AI_PROVIDER` | Server | `gemini`; unsupported adapters fail visibly. |
-| `GEMINI_API_KEY` | Server secret | Optional; absent means source facts remain usable without generation. |
-| `GEMINI_TEXT_MODEL` | Server | Example `gemini-3.8-flash`; verify entitlement and model availability before enabling. |
+| `AI_PROVIDER` | Server | `openrouter` by default; `gemini` remains supported. |
+| `OPENROUTER_API_KEY` | Server secret | Optional; required only for OpenRouter generation. Never expose to the browser. |
+| `OPENROUTER_TEXT_MODEL` | Server | Defaults to `nvidia/nemotron-3-ultra-550b-a55b:free`. |
+| `GEMINI_API_KEY` | Server secret | Optional alternative-provider key. |
+| `GEMINI_TEXT_MODEL` | Server | Required only when `AI_PROVIDER=gemini`. |
 | `AI_REQUEST_TIMEOUT_MS` | Server | 30000 by default. |
 | `AI_MAX_REQUESTS_PER_HOUR` | Server | 10 maximum per store; application quota, not Google's quota. |
 | `AI_MAX_OUTPUT_TOKENS` | Server | 1500 default. |
 | `AI_PROMPT_VERSION` | Server | `inventory-insights-v1`. |
 
-Changes to public values require a rebuild. Never paste secrets into issues, commits, client components or support logs. Missing Supabase configuration displays an explicit setup state rather than fabricated business data. Missing AI configuration does not block inventory or checkout.
+Changes to public values require a rebuild. Never paste secrets into issues, commits, client components or support logs. Missing Supabase configuration displays an explicit setup state rather than fabricated business data. Missing AI configuration does not block inventory or checkout. OpenRouter free-model availability and quotas are external to this application.
 
 ## Tests
 
@@ -110,7 +112,7 @@ SEED_ALLOW_LOCAL_DEMO=1 DATABASE_URL=... DEMO_OWNER_ID=... DEMO_STATE=post-sale 
 
 ## Deployment to Vercel
 
-`vercel.json` selects Next.js, `npm ci`, the production build, and a 60-second AI function limit. In Vercel, import this GitHub repository and select the completed implementation branch (or the reviewed merge into `master`). Use Node 22.x and set the three required Supabase/origin variables in the intended environment before building. Set optional Gemini variables only as server-side environment values. Keep preview callback URLs separately allowlisted; do not reuse an unrelated application's project or database.
+`vercel.json` selects Next.js, `npm ci`, the production build, and a 60-second AI function limit. In Vercel, import this GitHub repository and select the completed implementation branch (or the reviewed merge into `master`). Use Node 22.x and set the three required Supabase/origin variables in the intended environment before building. Set optional AI provider variables only as server-side environment values. For the requested OpenRouter setup, add `OPENROUTER_API_KEY`; the reviewed model slug is the default. Keep preview callback URLs separately allowlisted; do not reuse an unrelated application's project or database.
 
 After a deployment reaches Ready, verify on the **actual live origin**: register/confirm, empty catalog, create product, receive goods, save a separate draft, complete a discounted cash sale, print, inspect movements/low stock, export reports, deny another owner, and verify AI setup/error or one real generated summary. A Vercel build does not apply database migrations.
 

@@ -44,15 +44,23 @@ test('Auth patch preserves existing redirects without changing confirmation, SMT
   assert.equal(authPatch(patch,origin).uri_allow_list,patch.uri_allow_list);
   assert.ok(patch.uri_allow_list.includes('/auth/callback?next=/reset-password'));
 });
-test('only client configuration reaches Vercel; optional Gemini stays server-only', () => {
+test('only client configuration reaches Vercel; optional AI provider keys stay server-only', () => {
   const values=environmentValues(target,origin,env);
   assert.equal(values.length,3);
   assert.ok(!JSON.stringify(values).includes(env.SUPABASE_ACCESS_TOKEN));
   assert.ok(!JSON.stringify(values).includes(env.VERCEL_TOKEN));
-  const ai=environmentValues(target,origin,{...env,GEMINI_API_KEY:'test-provider-key',GEMINI_TEXT_MODEL:'chosen-model'});
-  assert.equal(ai.find(v=>v.key==='GEMINI_API_KEY').type,'encrypted');
-  assert.ok(!ai.some(v=>v.key.startsWith('NEXT_PUBLIC_')&&v.value==='test-provider-key'));
-  assert.throws(()=>validateTarget(target,{...env,GEMINI_API_KEY:'test-provider-key'}),/SET_GEMINI_TEXT_MODEL/);
+
+  const openrouter=environmentValues(target,origin,{...env,OPENROUTER_API_KEY:'test-openrouter-key'});
+  assert.equal(openrouter.find(v=>v.key==='OPENROUTER_API_KEY').type,'encrypted');
+  assert.equal(openrouter.find(v=>v.key==='AI_PROVIDER').value,'openrouter');
+  assert.equal(openrouter.find(v=>v.key==='OPENROUTER_TEXT_MODEL').value,'nvidia/nemotron-3-ultra-550b-a55b:free');
+  assert.ok(!openrouter.some(v=>v.key.startsWith('NEXT_PUBLIC_')&&v.value==='test-openrouter-key'));
+  assert.throws(()=>validateTarget(target,{...env,OPENROUTER_API_KEY:'x',OPENROUTER_TEXT_MODEL:'bad model'}),/SET_OPENROUTER_TEXT_MODEL/);
+
+  const gemini=environmentValues(target,origin,{...env,GEMINI_API_KEY:'test-gemini-key',GEMINI_TEXT_MODEL:'chosen-model'});
+  assert.equal(gemini.find(v=>v.key==='GEMINI_API_KEY').type,'encrypted');
+  assert.equal(gemini.find(v=>v.key==='AI_PROVIDER').value,'gemini');
+  assert.throws(()=>validateTarget(target,{...env,GEMINI_API_KEY:'test-gemini-key'}),/SET_GEMINI_TEXT_MODEL/);
 });
 
 function fixture(overrides={}) {
