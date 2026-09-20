@@ -24,7 +24,7 @@ export class OpenRouterProvider implements InventoryInsightProvider{
      'X-Title':'Smart Inventory'
     };
     if(this.appUrl){
-     try{const origin=new URL(this.appUrl);if(['http:','https:'].includes(origin.protocol))headers['HTTP-Referer']=origin.origin;}catch{}
+     try{const origin=new URL(this.appUrl);if(['http:','https:'].includes(origin.protocol))headers['HTTP-Referer']=origin.origin;}catch{/* Optional attribution header is omitted when APP_URL is invalid. */}
     }
     const response=await this.transport('https://openrouter.ai/api/v1/chat/completions',{
      method:'POST',
