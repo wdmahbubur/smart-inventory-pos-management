@@ -1,6 +1,18 @@
 # Implementation status — 20 September 2026
 
-**Default branch:** `master`. Implementation was pushed feature-by-feature on `feat/complete-inventory-application` and merged through **PR #1**. This is a functional application, not a static design bundle. The approved hosted Supabase schema is now installed and verified. It is **not yet a signed-off hosted release**: Vercel deployment, hosted Auth/browser verification, a real Gemini smoke test and final reference-parity review remain open.
+**Default branch:** `master`. Implementation was pushed feature-by-feature on `feat/complete-inventory-application` and merged through **PR #1**. This is a functional application, not a static design bundle. The approved hosted Supabase schema is installed and verified. It is **not yet a signed-off hosted release**: Vercel publication, hosted Auth/browser verification, a real Gemini smoke test and final reference-parity review remain open.
+
+## Latest release checkpoint — 20 September
+
+Implemented and pushed the target-scoped **Deploy Smart Inventory to Vercel** workflow and guarded REST scripts in `be8112f5586150e069b5ba58baae01cac1268857`; added deployment tests/configuration to application CI/source handoff in `c0202e93d6b511efccfed4d1e11b935825f0fb16`.
+
+Release workflow **35491076004** passed **15 deployment-safety/mock orchestration tests**, **23 unit tests**, typecheck, lint and production build, plus **15 actual hosted Supabase read-only HTTP checks**. Application CI **35491134851** at `c0202e93` completed successfully, including fresh migrations, SQL-role tests and the full benchmark. Real local-Supabase browser workflow **35491076092** at `be8112f5` also completed successfully.
+
+**Vercel was NOT deployed.** The connected action again returned `-32602: Tool deploy_to_vercel not found`. Repository Actions preflight **35490716023** confirmed `VERCEL_TOKEN` and `SUPABASE_ACCESS_TOKEN` are absent. The release workflow's actual publish step was explicitly **skipped**; its green verification/credential-check job is not evidence of deployment. `GEMINI_API_KEY` was also absent.
+
+The owner must add those two deployment credentials as GitHub **Actions secrets**, not paste them into chat, then run the prepared workflow on `master`. The script is designed to verify the exact target, configure Vercel environment values, deploy the verified SHA, confirm READY/production alias, configure Supabase callback origins and perform live read-only checks. External writes remain unverified until credentials permit a real run. No archive or business data was modified in this continuation.
+
+Exact results, run IDs and remaining setup: [Release verification](docs/verification/release-2026-09-20.md) and [Vercel release guide](docs/deployments/VERCEL_RELEASE.md).
 
 ## Hosted database checkpoint — 20 September
 
@@ -27,20 +39,20 @@ Full evidence, row counts, locations, restore precautions and migration-tool gui
 
 These mappings do **not** assert every subcase of all 60 acceptance rows passed. See TEST_RESULTS.md and VISUAL_QA.md for exact evidence and open cases.
 
-## Verified checkpoints
+## Earlier verified checkpoints
 
 Application CI **35459112450**, commit `173c7e82c22ab5a02383511046d1a1216d9a5fd3`, passed **10 fresh migrations, 24 database tests, 23 unit tests, typecheck, lint, production build**, the 1,200-product / 50,000-row benchmark, and an authenticated **100,001-row export-limit rejection**. Real local Supabase browser run **35459052949**, commit `61d58c4ac79584d4ab4404446f891b0d1033d8ae`, passed **13/13 tests in 56.4 seconds**, including the updated titles, canonical routes and unsaved Orange drink form example. These are explicit tested checkpoints; subsequent documentation updates do not imply another unexecuted code test.
 
 All **22 routes at 360/390/768/1024/1440/1920px** passed page-overflow/rendering checks. The artifact has **47 PNGs**: 22 desktop, 22 mobile, correct pre-sale POS/cart states and an A4 print capture. Desktop/mobile contact sheets were inspected. Specific composition/state gaps remain documented; no-overflow is not pixel-parity approval.
 
-Migration 009 preserves deferred ledger invariants while using store/product indexing; migration 010 confines parameter-aware planning to the report RPC. The final runner's purchase-report p95 was **102.04 ms**, 20-line receipt **11.71 ms** and checkout **14.25 ms**. These are localhost authenticated SQL timings, **not deployed HTTP latency**. Full exports, balances and ledger chains reconciled. Raw runner evidence: `docs/verification/performance-2026-09-19.json`.
+Migration 009 preserves deferred ledger invariants while using store/product indexing; migration 010 confines parameter-aware planning to the report RPC. That runner's purchase-report p95 was **102.04 ms**, 20-line receipt **11.71 ms** and checkout **14.25 ms**. These are localhost authenticated SQL timings, **not deployed HTTP latency**. Full exports, balances and ledger chains reconciled. Raw runner evidence: `docs/verification/performance-2026-09-19.json`.
 
 Feature pushes include dialog accessibility (`255f6d7`), scoped ledger validation (`b8ac85e`), bounded request streams (`2457ead`), real owner/concurrent Supabase browser coverage (`0e98d86`), report planning (`9702caf`), reference-aligned UI, streamed CSV, canonical visual states (`9ef3bc2`), database export-boundary coverage (`61d58c4`) and clean source-handoff CI (`173c7e8`).
 
 ## Remaining release gates
 
-1. **Hosted Supabase integration:** the approved project's backup/archive/schema installation is complete. Configure the production site/callback URLs and SMTP, then verify real hosted Auth and browser workflows. Unrelated TakaTrack data was not modified.
-2. **Vercel:** the earlier connected deploy action returned JSON-RPC `-32602: Tool deploy_to_vercel not found`. No deployment ID/live URL is claimed. A working deployment action or repository import, environment configuration and live workflow verification remain necessary. The selected hosted database schema is now ready.
+1. **Vercel authorization and publication:** add the two required Actions secrets and run the prepared workflow on master. No working live URL is claimed. The selected hosted database schema is ready.
+2. **Hosted Supabase integration:** the backup/archive/schema installation is complete and public Auth/anonymous-denial HTTP checks pass. Configure the production site/callback URLs through the release script and configure SMTP, then verify real hosted Auth and authenticated browser workflows. Unrelated TakaTrack data was not modified.
 3. **Gemini:** configure a server-side key/model securely and run the documented Bengali/English smoke test. Core operations and source facts work without AI; successful external generation is not verified.
 4. **Visual/acceptance:** remaining panel/form composition and populated-state differences are recorded in VISUAL_QA.md. Exact pixel parity, Safari/Firefox, physical printers, every keyboard combination, hosted cache/secret auditing and deployed multi-instance latency remain unverified. Both unit and actual database coverage verify the 100,001-row export rejection.
 
