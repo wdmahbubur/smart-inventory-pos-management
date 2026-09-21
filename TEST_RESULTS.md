@@ -1,5 +1,20 @@
 # Executed verification — 19 September 2026
 
+## Net-profit feature verification — 21 September 2026
+
+| Check | Result | Evidence |
+|---|---|---|
+| Feature TypeScript / lint / unit baseline | PASS | Recovered application workspace: typecheck and lint pass; 23/23 baseline unit tests pass with the new CSV profit assertion. |
+| Fresh migration chain | PASS | Disposable PostgreSQL applied all **14 source migrations** in order, including hosted-era migrations 011–013 and new migration 202609210001. |
+| Database tests | **24 / 24 PASS** | Fresh 14-migration disposable database, authenticated role/JWT contexts. |
+| Dashboard profit | PASS | Sample workspace returns COGS BDT 230 and net profit BDT 100 for net sales BDT 330. |
+| Sales report profit | PASS | Report summary and source-row contributions reconcile to BDT 100. |
+| Historical stability | PASS | Raising product reference cost after a completed sale does not change captured historical COGS/profit. |
+| Production build | PASS (offline-font verification) | `next build --webpack` completed with test-only mocked Google Fonts responses; normal sandbox build cannot reach Google Fonts. |
+| Hosted Supabase migration | NOT RUN | Production database intentionally unchanged by this feature commit; migration 202609210001 remains pending explicit live-schema authorization. |
+
+Profit formula under test: `net sales - captured sale-line reference cost`. This is a sales-margin metric before operating expenses, not FIFO/weighted-average accounting profit.
+
 ## Reproducible evidence
 
 | Check | Result | Environment / evidence |

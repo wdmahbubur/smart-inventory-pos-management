@@ -21,8 +21,8 @@ export async function base() {
  const supplier=await rpc<{id:string}>(user,'catalog_mutate',['supplier','save',{name:'ABC Traders'},uid()]);
  return {user,category:category.id,supplier:supplier.id};
 }
-export async function product(ctx:{user:string,category:string},sku=uid().slice(0,8),price='10000') {
- const payload={name:sku,sku,category_id:ctx.category,unit:'bottle',reference_cost_paisa:'7000',selling_price_paisa:price,minimum_stock:10};
+export async function product(ctx:{user:string,category:string},sku=uid().slice(0,8),price='10000',cost='7000') {
+ const payload={name:sku,sku,category_id:ctx.category,unit:'bottle',reference_cost_paisa:cost,selling_price_paisa:price,minimum_stock:10};
  const result=await rpc<{id:string,version:number}>(ctx.user,'catalog_mutate',['product','save',payload,uid()]);return {...result,payload};
 }
 export const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dhaka',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());

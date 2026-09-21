@@ -1,6 +1,16 @@
-# Implementation status — 20 September 2026
+# Implementation status — 21 September 2026
 
-**Default branch:** `master`. Implementation was pushed feature-by-feature on `feat/complete-inventory-application` and merged through **PR #1**. This is a functional application, not a static design bundle. The approved hosted Supabase schema is installed and verified. It is **not yet a signed-off hosted release**: Vercel publication, hosted Auth/browser verification, a real Gemini smoke test and final reference-parity review remain open.
+**Default branch:** `master`. Implementation was pushed feature-by-feature on `feat/complete-inventory-application` and merged through **PR #1**. This is a functional application, not a static design bundle. The approved hosted Supabase schema is installed and verified through migration 013; the new net-profit migration is source-ready but has not been applied to the hosted project in this change. It is **not yet a signed-off hosted release**: Vercel publication, hosted Auth/browser verification, a real provider smoke test and final reference-parity review remain open.
+
+## Net-profit feature checkpoint — 21 September
+
+- Added **Net profit today** to Dashboard and **Net profit** plus captured-cost reconciliation to Sales Report.
+- Formula: **net sales after order discount − sold units’ reference cost captured at sale completion**. The UI labels this as before operating expenses; it is not FIFO/weighted-average accounting profit.
+- `sale_items` gains immutable `unit_cost_paisa` and `line_cost_paisa`. Existing sale lines are backfilled once from the product reference cost at migration time; new sales capture cost at checkout, so later catalog cost edits do not rewrite historical profit.
+- Sales CSV exports captured unit/line cost, margin before order discount, the order discount once, and net-profit contribution.
+- Demo reconciliation: BDT 330 net sales − BDT 230 captured cost = **BDT 100 net profit**.
+- Local verification on the latest migration chain: all **14 migrations applied cleanly**, **24/24 database tests passed**, and the feature snapshot also passed TypeScript, lint and unit tests. Production webpack build passed with test-only offline Google-font responses because this sandbox cannot reach Google Fonts.
+- **Hosted Supabase migration 202609210001 was not applied in this change.** The hosted database remains at the previously verified migration baseline until a live-schema update is explicitly authorized.
 
 ## Latest release checkpoint — 20 September
 

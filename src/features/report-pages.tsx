@@ -12,7 +12,7 @@ import type {SearchParams} from './catalog-pages';
 
 function Breakdown({data,kind}:{data:Report;kind:ReportKind}) {
  const inventory=kind==='inventory',sales=kind==='sales';
- const headers=inventory?['Product','Category','Available','Minimum','Reference cost','Estimated value','Status']:sales?['Product','SKU','Quantity sold','Gross line sales']:['Product','SKU','Quantity received','Actual unit cost','Received value'];
+ const headers=inventory?['Product','Category','Available','Minimum','Reference cost','Estimated value','Status']:sales?['Product','SKU','Quantity sold','Gross line sales','Captured cost','Margin before order discount']:['Product','SKU','Quantity received','Actual unit cost','Received value'];
  return <Table headers={headers} empty={!data.rows.length?<Empty title="No matching report rows" description="Choose another period or clear filters. Empty totals remain zero."/>:undefined}>
   {data.rows.map(row=><tr key={row.id}>
    <td><ProductLabel name={row.name} sku={inventory?row.sku:undefined} icon_key={row.icon_key} color_key={row.color_key}/></td>
@@ -23,6 +23,7 @@ function Breakdown({data,kind}:{data:Report;kind:ReportKind}) {
     <td>{row.sku}</td><td>{row.quantity}</td>
     {!sales&&<td>{row.min_cost_paisa===row.max_cost_paisa?money(row.min_cost_paisa??'0'):<span>Various costs<small className="muted" style={{display:'block'}}>{money(row.min_cost_paisa??'0')}–{money(row.max_cost_paisa??'0')}</small></span>}</td>}
     <td><strong>{money((sales?row.gross_paisa:row.total_paisa)??'0')}</strong></td>
+    {sales&&<><td>{money(row.cost_paisa??'0')}</td><td><strong>{money(row.gross_profit_paisa??'0')}</strong></td></>}
    </>}
   </tr>)}
  </Table>;
@@ -37,13 +38,14 @@ export async function ReportPage({kind,params}:{kind:ReportKind;params:SearchPar
   <Heading eyebrow="Insights / Reports" title={title} description={inventory?`Current snapshot as of ${displayDate(data.snapshot_at,true)} · Asia/Dhaka`:`${displayDate(data.from!)} – ${displayDate(data.to!)} · Actual ${sales?'completion':'receipt'} dates in Asia/Dhaka`} actions={<ExportButton kind={kind}/>}/>
   <ReportTabs active={kind}/>
   {!inventory&&<ReportPeriod from={data.from!} to={data.to!}/>}
-  <div className={`stats ${inventory||!sales?'three':''}`}>
+  <div className={`stats ${inventory||!sales?'three':sales?'five':''}`}>
    {inventory?<>
     <Stat label="Estimated stock value" value={money(data.summary.value_paisa)} note="All active products · reference-cost estimate"/>
     <Stat label="Active products" value={data.summary.active_count} note="Current whole catalog" color="blue"/>
     <Stat label="Products needing attention" value={data.summary.attention_count} note={`${data.summary.low_stock} low · ${data.summary.out_of_stock} out of stock`} color="amber"/>
    </>:<>
     <Stat label={sales?'Net sales':'Received purchase value'} value={money(data.summary.total_paisa)} note={sales?'After fixed order discounts':'Goods received, not payments confirmed'} icon={sales?'store':'bag'}/>
+    {sales&&<Stat label="Net profit" value={money(data.summary.net_profit_paisa??'0')} note="Net sales − captured product cost · before operating expenses" color="violet"/>}
     <Stat label={sales?'Completed sales':'Received purchases'} value={data.summary.count} note={sales?'Completed cash sales only':'Drafts excluded'} color="blue"/>
     <Stat label={sales?'Units sold':'Units received'} value={data.summary.units} note="Selling units, not weight or volume" color="amber"/>
     {sales&&<Stat label="Order discounts" value={money(data.summary.discount_paisa??'0')} note={`Average sale: ${money(data.summary.average_paisa??'0')}`} color="rose"/>}
@@ -58,9 +60,9 @@ export async function ReportPage({kind,params}:{kind:ReportKind;params:SearchPar
      <StockDonut inStock={data.summary.in_stock} low={data.summary.low_stock} out={data.summary.out_of_stock}/>
      <Notice>Zero quantity is out of stock. Positive quantity below minimum is low. Equality to minimum is in stock.</Notice>
     </>:sales?<>
-     <dl className="definition-list"><dt>Gross product sales</dt><dd>{money(data.summary.subtotal_paisa??'0')}</dd><dt>Less order discounts</dt><dd>−{money(data.summary.discount_paisa??'0')}</dd></dl><hr/>
-     <dl className="definition-list"><dt className="strong">Net sales</dt><dd className="total">{money(data.summary.total_paisa)}</dd></dl>
-     <div style={{marginTop:22}}><Notice>Product bars show gross line sales before order discounts. Tender and change are not revenue. No profit is calculated.</Notice></div>
+     <dl className="definition-list"><dt>Gross product sales</dt><dd>{money(data.summary.subtotal_paisa??'0')}</dd><dt>Less order discounts</dt><dd>−{money(data.summary.discount_paisa??'0')}</dd><dt>Net sales</dt><dd>{money(data.summary.total_paisa)}</dd><dt>Less captured product cost</dt><dd>−{money(data.summary.cogs_paisa??'0')}</dd></dl><hr/>
+     <dl className="definition-list"><dt className="strong">Net profit</dt><dd className="total">{money(data.summary.net_profit_paisa??'0')}</dd></dl>
+     <div style={{marginTop:22}}><Notice>Net profit uses each sold item’s reference cost captured when the sale completes. It includes order discounts but does not include rent, salaries, utilities, tax or other operating expenses.</Notice></div>
     </>:<>
      <dl className="definition-list"><dt>Received value</dt><dd>{money(data.summary.total_paisa)}</dd><dt>Received documents</dt><dd>{data.summary.count}</dd><dt>Units received</dt><dd>{data.summary.units}</dd></dl>
      <div style={{marginTop:24}}><Notice>Actual captured item costs are used here, not the current catalog reference cost. Drafts never enter these totals.</Notice></div>

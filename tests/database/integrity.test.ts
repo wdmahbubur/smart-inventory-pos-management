@@ -49,12 +49,12 @@ test('AT-20/21/22/25: receipt retries once, actual cost remains independent, alr
  assert.equal((await asOwner<{reference_cost_paisa:string}>(a.user,'select reference_cost_paisa from public.products where id=$1',[p.id]))[0].reference_cost_paisa,'7000');
 });
 test('AT-12/13/15/27: sample sale captures immutable prices, correct net/cash/change and balances',async()=>{
- const a=await base(),c=await product(a,'COKE'),h=await product(a,'CHIPS','5000');
+ const a=await base(),c=await product(a,'COKE'),h=await product(a,'CHIPS','5000','3000');
  await rpc(a.user,'write_purchase',[purchase(a.supplier,[{product_id:c.id,quantity:30,unit_cost_paisa:'7000'},{product_id:h.id,quantity:20,unit_cost_paisa:'3000'}]),uid(),true]);
  const body={items:[...sale(c.id,2).items,...sale(h.id,3,'5000').items],discount_paisa:'2000',cash_received_paisa:'50000'};
  const sold=await rpc(a.user,'complete_sale',[body,uid()]);assert.equal(sold.total_paisa,'33000');assert.equal(sold.change_paisa,'17000');assert.equal(await balance(a.user,c.id),28);assert.equal(await balance(a.user,h.id),17);
  await rpc(a.user,'catalog_mutate',['product','save',{...c.payload,id:c.id,expected_version:1,name:'Renamed',selling_price_paisa:'15000'},uid()]);
- const snapshot=await asOwner<{product_name_snapshot:string,unit_price_paisa:string}>(a.user,'select * from public.sale_items where sale_id=$1 and product_id=$2',[sold.id,c.id]);assert.equal(snapshot[0].product_name_snapshot,'COKE');assert.equal(snapshot[0].unit_price_paisa,'10000');
+ const snapshot=await asOwner<{product_name_snapshot:string;unit_price_paisa:string;unit_cost_paisa:string;line_cost_paisa:string}>(a.user,'select * from public.sale_items where sale_id=$1 and product_id=$2',[sold.id,c.id]);assert.equal(snapshot[0].product_name_snapshot,'COKE');assert.equal(snapshot[0].unit_price_paisa,'10000');assert.equal(snapshot[0].unit_cost_paisa,'7000');assert.equal(snapshot[0].line_cost_paisa,'14000');
  await assert.rejects(rpc(a.user,'catalog_mutate',['product','save',{...c.payload,id:c.id,expected_version:2,sku:'DIFFERENT'},uid()]),/IDENTITY_IMMUTABLE/);
  await assert.rejects(rpc(a.user,'catalog_mutate',['product','archive',{id:c.id,expected_version:2},uid()]),/STOCK_NOT_ZERO/);
 });

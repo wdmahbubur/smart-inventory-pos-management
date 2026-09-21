@@ -42,9 +42,9 @@ export async function seedDemo(connectionString:string,ownerId:string,state:'pre
   await db.query('alter table public.purchases enable trigger guard_purchase; alter table public.sales enable trigger immutable_sales; alter table public.stock_movements enable trigger immutable_movements;');
   const mismatch=await db.query('select b.product_id from public.inventory_balances b left join public.stock_movements m on m.product_id=b.product_id where b.store_id=$1 group by b.product_id,b.quantity having b.quantity<>coalesce(sum(m.quantity_delta),0)',[store.id]);assert.equal(mismatch.rowCount,0);
   const chain=await db.query('select * from (select quantity_before,lag(quantity_after,1,0) over(partition by product_id order by sequence) previous from public.stock_movements where store_id=$1) x where quantity_before<>previous',[store.id]);assert.equal(chain.rowCount,0);
-  await db.query('set local role authenticated');const workspace=await rpc<{inventory:{value_paisa:string;units:number;attention_count:number};sales:{total_paisa:string};purchases:{total_paisa:string}}>('get_workspace',[]);
+  await db.query('set local role authenticated');const workspace=await rpc<{inventory:{value_paisa:string;units:number;attention_count:number};sales:{total_paisa:string;net_profit_paisa:string};purchases:{total_paisa:string}}>('get_workspace',[]);
   assert.equal(workspace.purchases.total_paisa,'205000');assert.equal(workspace.inventory.attention_count,4);
-  if(state==='post-sale'){assert.equal(workspace.inventory.value_paisa,'535500');assert.equal(workspace.inventory.units,69);assert.equal(workspace.sales.total_paisa,'33000');}
+  if(state==='post-sale'){assert.equal(workspace.inventory.value_paisa,'535500');assert.equal(workspace.inventory.units,69);assert.equal(workspace.sales.total_paisa,'33000');assert.equal(workspace.sales.net_profit_paisa,'10000');}
   await db.query('commit');return {ownerId,storeId:store.id,products,purchaseId:received.id,draftId:draft.id,saleId:sale?.id??null,state};
  }catch(error){await db.query('rollback');throw error;}finally{await db.end();}
 }

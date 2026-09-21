@@ -59,3 +59,8 @@ The source images contain pre-existing stock but no source transactions creating
 - No mobile PNG references exist. Chromium is verified; Safari/Firefox/mobile operating-system browsers and physical printers are not certified.
 - Successful live AI output requires a real provider credential. Source-fact and missing-provider error states are verified; generated-copy comparison is not.
 - Browser-native controls, icon glyphs and font rasterization may also vary by operating system.
+
+
+## User-requested profit metric deviation
+
+The original 22-screen design set did not contain profit metrics. The latest product request intentionally adds a fifth Dashboard KPI card for **Net profit today** and a fifth Sales Report KPI card plus cost/profit reconciliation columns. This is an approved functional deviation from the original desktop references. Responsive rules keep the five-card set at five columns on wide desktop, three on tablet, and two on mobile.
