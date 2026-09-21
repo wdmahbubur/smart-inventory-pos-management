@@ -39,8 +39,11 @@ export function Insights({initialContext,initialInsight}:{initialContext:Insight
  }
 
  const facts=context.facts,forecast=facts.forecast,current=insight?.language===language?insight:null,bn=language==='bn';
- const cards=buildSuggestionCards(facts,language);
- const visibleError=error.includes('could not be grounded')?(bn?'AI এবার suggestionগুলো priority দিতে পারেনি। কোনো data save বা change হয়নি—নিচের verified explanation ব্যবহার করা যাবে।':'AI could not rank the suggestions this time. Nothing was saved or changed; the verified explanation below is still available.'):error;
+ const baseCards=buildSuggestionCards(facts,language);
+ const priority=current?.content.section_keys??[];
+ const order=new Map(priority.map((key,index)=>[key,index]));
+ const cards=[...baseCards].sort((a,b)=>(order.get(a.id as typeof priority[number])??99)-(order.get(b.id as typeof priority[number])??99));
+ const visibleError=error.includes('could not be grounded')?(bn?'AI এবার suggestionগুলোর priority ঠিক করতে পারেনি। কোনো data save বা change হয়নি।':'AI could not rank the suggestions this time. Nothing was saved or changed.'):error;
 
  return <>
   <Heading eyebrow="Insights / AI" title="AI suggestion center" description="Simple, data-based suggestions for what may sell next, what to restock, what is moving slowly, and where profit opportunities may exist." actions={<div className="insight-actions"><select aria-label="Insight language" disabled={busy} value={language} onChange={e=>{setLanguage(e.target.value as Language);setError('');}}><option value="en">English</option><option value="bn">বাংলা</option></select><button className="button primary" type="button" disabled={busy} onClick={()=>void generate(!!current)}><RefreshCw size={15}/>{busy?'Generating…':current?'Refresh suggestions':'Generate AI suggestions'}</button></div>}/>
@@ -77,22 +80,16 @@ export function Insights({initialContext,initialInsight}:{initialContext:Insight
    </Card>
   </div>
 
-  <div className="suggestion-columns ai-suggestion-bottom">
-   <Card title={bn?'AI explanation & priorities':'AI explanation & priorities'} description={bn?'কেন এই suggestionগুলো দেখানো হচ্ছে তার সহজ ব্যাখ্যা। AI শুধু priority ঠিক করে; সংখ্যা verified data থেকে আসে।':'A simple explanation of why these suggestions appear. AI only prioritizes them; the numbers come from verified store data.'} className="insight-panel" body>
-    {visibleError&&<div className="form-message"><Notice tone="error">{visibleError}</Notice></div>}
-    {current?<div className="insight-readout">{current.stale&&<div className="form-message"><Notice tone="warning">This saved explanation is stale because store data changed. Refresh suggestions before using it.</Notice></div>}<div className="insight-readout-meta"><span className="insight-provider"><Sparkles size={12}/>{current.provider}<b>·</b>{current.model}</span><span>{displayDate(current.generated_at,true)}</span></div><div lang={language} className="insight-summary"><p>{current.output.summary}</p></div><div className="insight-readout-sections">{current.output.sections.map((section,index)=><section key={index} className="insight-section" lang={language}><h3>{section.heading}</h3><p>{section.explanation}</p></section>)}</div><div className="insight-audit"><ShieldCheck size={14}/><span>Fact snapshot {displayDate(current.facts_snapshot.snapshot_at,true)} · Revision {current.store_data_revision} · {current.prompt_version}</span></div></div>:<div className="grounded-explanation"><div className="insight-summary"><p>{bn?'বর্তমান store data অনুযায়ী নিচের বিষয়গুলো আগে review করা যেতে পারে। AI generate করলে এগুলোর মধ্যে সবচেয়ে গুরুত্বপূর্ণগুলো priority অনুযায়ী সাজাবে।':'Based on your current store data, these are the main areas worth reviewing. Generate AI suggestions to rank the most important ones for you.'}</p></div><div className="insight-readout-sections">{cards.slice(0,4).map(card=><section className="insight-section" key={card.id}><h3>{card.title}</h3><p>{card.description}</p><small className="muted">{card.detail}</small></section>)}</div>{!cards.length&&<Empty title={bn?'আরও sales history দরকার':'More sales history is needed'} description={bn?'কিছু completed sales হলে এখানে explanation দেখা যাবে।':'Once you have more completed sales, explanations will appear here.'}/>}</div>} 
-   </Card>
-
-   <Card title={bn?'Prediction কীভাবে তৈরি হয়':'How the prediction works'} description={`Snapshot: ${displayDate(facts.snapshot_at,true)} · Asia/Dhaka`} body>
-    <ul className="suggestion-method">
-     <li><strong>7/30-day sales velocity</strong><span>Recent demand and a longer baseline are weighted together.</span></li>
-     <li><strong>Recent trend</strong><span>The last 7 days are compared with the previous 7 days, with caps to reduce spikes.</span></li>
-     <li><strong>Weekday environment</strong><span>A bounded 56-day store-wide weekday pattern adjusts the short forecast.</span></li>
-     <li><strong>Margin & stock cover</strong><span>Current reference cost, selling price and quantity drive restock and discount headroom.</span></li>
-     <li><strong>Slow-stock signal</strong><span>30+ days without a completed sale while stock remains triggers review.</span></li>
-    </ul>
-    <Notice tone="neutral"><ShieldCheck size={14}/>{bn?'Weather, local event, competitor price বা external market data এখন app-এ নেই—AI এগুলো জানে বলে ধরে নেয় না।':'Weather, local events, competitor pricing and external market data are not currently ingested, so AI does not pretend to know them.'}</Notice>
-   </Card>
-  </div>
+  {visibleError&&<div className="form-message" style={{marginBottom:20}}><Notice tone="error">{visibleError}</Notice></div>}
+  <Card title={bn?'Prediction কীভাবে তৈরি হয়':'How the prediction works'} description={`Snapshot: ${displayDate(facts.snapshot_at,true)} · Asia/Dhaka`} className="prediction-method-card" body>
+   <ul className="suggestion-method">
+    <li><strong>7/30-day sales velocity</strong><span>Recent demand and a longer baseline are weighted together.</span></li>
+    <li><strong>Recent trend</strong><span>The last 7 days are compared with the previous 7 days, with caps to reduce spikes.</span></li>
+    <li><strong>Weekday environment</strong><span>A bounded 56-day store-wide weekday pattern adjusts the short forecast.</span></li>
+    <li><strong>Margin & stock cover</strong><span>Current reference cost, selling price and quantity drive restock and discount headroom.</span></li>
+    <li><strong>Slow-stock signal</strong><span>30+ days without a completed sale while stock remains triggers review.</span></li>
+   </ul>
+   <Notice tone="neutral"><ShieldCheck size={14}/>{bn?'Weather, local event, competitor price বা external market data এখন app-এ নেই—AI এগুলো জানে বলে ধরে নেয় না।':'Weather, local events, competitor pricing and external market data are not currently ingested, so AI does not pretend to know them.'}</Notice>
+  </Card>
  </>;
 }
