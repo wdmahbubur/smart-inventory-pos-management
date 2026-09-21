@@ -31,7 +31,7 @@ The CLI applies all `supabase/migrations/*.sql` to the new local database. Set `
 npm run dev -- --hostname 127.0.0.1
 ```
 
-Open `http://127.0.0.1:3000`, register a new owner/store, then open the confirmation link in the local mail viewer at `http://127.0.0.1:54324`. New accounts are empty. Create a category, supplier and product; receive a purchase before attempting a sale. Password recovery uses the same local mail service.
+Open `http://127.0.0.1:3000` and register a new owner/store. Email confirmation is temporarily disabled, so a successful signup enters the empty store immediately. Create a category, supplier and product; receive a purchase before attempting a sale. Password recovery still uses the local mail service at `http://127.0.0.1:54324`.
 
 `supabase db reset` **destroys this local stack's data** and reapplies migrations. Use it only for the disposable development/test environment. `supabase stop` stops that stack.
 
@@ -42,7 +42,7 @@ Create a **new, dedicated** project in an explicitly selected organization after
 - `https://YOUR-APP/auth/callback`
 - `https://YOUR-APP/auth/callback?next=/reset-password`
 
-Use Supabase CLI `supabase link --project-ref YOUR_NEW_PROJECT_REF` and `supabase db push` only after checking the target. The SQL migrations are the schema source of truth. Configure production SMTP, email delivery, confirmation and Auth rate limits; local mail tests do not verify real email deliverability. Do not copy the permissive local test email rate limits to production.
+Use Supabase CLI `supabase link --project-ref YOUR_NEW_PROJECT_REF` and `supabase db push` only after checking the target. The SQL migrations are the schema source of truth. Email confirmation is temporarily disabled for the current requested release; the hosted project's **Confirm email** setting must match that state. Password recovery email remains enabled. Re-enable signup confirmation when requested. Configure production SMTP, email delivery and Auth rate limits; local mail tests do not verify real email deliverability. Do not copy the permissive local test email rate limits to production.
 
 As an alternative for an **empty hosted Supabase database**, `DATABASE_URL=... ALLOW_REMOTE_MIGRATIONS=I_HAVE_CONFIRMED_THE_DEDICATED_PROJECT npm run db:migrate` uses a private migration checksum ledger. Do not mix this runner with the CLI on an already-migrated database: the two tools maintain different migration histories. `DATABASE_URL` belongs only in controlled administrator tooling, never the running app or browser.
 
@@ -98,7 +98,7 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
-Playwright starts the production server. It tests real email verification/recovery in local mail, ownership through real JWT/PostgREST, checkout timeout recovery, the new-owner operational journey, concurrent last-unit checkout, keyboard modal focus, print styles and all 22 routes at 360, 390, 768, 1024, 1440 and 1920 pixels. Screenshots are under `test-results/screenshots/{390,1440}`. GitHub Actions runs both isolated database checks and disposable Supabase browser checks; artifacts are retained for a limited time.
+Playwright starts the production server. It tests direct signup with confirmation disabled plus real password-recovery email, ownership through real JWT/PostgREST, checkout timeout recovery, the new-owner operational journey, concurrent last-unit checkout, keyboard modal focus, print styles and all 22 routes at 360, 390, 768, 1024, 1440 and 1920 pixels. Screenshots are under `test-results/screenshots/{390,1440}`. GitHub Actions runs both isolated database checks and disposable Supabase browser checks; artifacts are retained for a limited time.
 
 ## Controlled fixtures
 

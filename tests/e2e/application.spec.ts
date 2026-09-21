@@ -16,10 +16,9 @@ async function emailLink(email:string,subject:string):Promise<string>{
 async function capture(page:Page,name:string,width:number){await page.evaluate(()=>document.fonts.ready);mkdirSync(`test-results/screenshots/${width}`,{recursive:true});await page.screenshot({path:`test-results/screenshots/${width}/${name}.png`,fullPage:true,animations:'disabled'});}
 async function noOverflow(page:Page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);}
 
-test('actual signup, verification email, empty store and password recovery',async({page})=>{
+test('actual signup enters the empty store directly and password recovery still uses email',async({page})=>{
  const email=`owner-${randomUUID()}@example.test`,password=`Secure-${randomUUID()}Aa1!`;
- await page.goto('/register');await page.getByLabel('Full name',{exact:true}).fill('Browser Owner');await page.getByLabel('Store name',{exact:true}).fill('Browser Test Store');await page.getByLabel('Email address').fill(email);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByLabel('Confirm password').fill(password);await page.getByRole('button',{name:'Create account',exact:true}).click();await expect(page).toHaveURL(/verify-email/);
- await page.goto(await emailLink(email,'confirm'));await expect(page).toHaveURL(/dashboard$/);await expect(page.getByText('No posted activity yet')).toBeVisible();
+ await page.goto('/register');await page.getByLabel('Full name',{exact:true}).fill('Browser Owner');await page.getByLabel('Store name',{exact:true}).fill('Browser Test Store');await page.getByLabel('Email address').fill(email);await page.getByLabel('Password',{exact:true}).fill(password);await page.getByLabel('Confirm password').fill(password);await page.getByRole('button',{name:'Create account',exact:true}).click();await expect(page).toHaveURL(/dashboard$/);await expect(page.getByText('No posted activity yet')).toBeVisible();
  const response=await page.request.get('/api/catalog?kind=products');expect(response.status()).toBe(200);expect((await response.json()).total).toBe(0);
  await page.getByRole('button',{name:'Log out',exact:true}).click();await expect(page).toHaveURL(/login$/);
  await page.goto('/forgot-password');await page.getByLabel('Email address').fill(email);await page.getByRole('button',{name:'Send reset link'}).click();await expect(page.getByText('If an account exists for this email, password-reset instructions will be sent.',{exact:false})).toBeVisible();
