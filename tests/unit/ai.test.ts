@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {unitFacts} from '../fixtures/facts';
-import {buildPolicy,validateOutput,expandSelection,resolveFacts,deliverInsight} from '../../src/lib/ai/grounding';
+import {buildPolicy,validateOutput,resolveFacts,deliverInsight} from '../../src/lib/ai/grounding';
 import {buildPrompt} from '../../src/lib/ai/prompt';
 import {readAIConfig} from '../../src/lib/ai/config';
 import {GeminiProvider} from '../../src/lib/ai/providers/gemini';
@@ -21,13 +21,13 @@ test('AI configuration upgrades the legacy prompt version and never fabricates a
 
 test('grounding accepts only approved forecast suggestions and rejects invented claims',()=>{
  const policy=buildPolicy(facts,'en');
- const valid=expandSelection({summary_key:'growth',section_keys:['demand','restock','discount','stagnant']},policy);
+ const valid={summary_key:'growth' as const,section_keys:['demand','restock','discount','stagnant'] as const};
  assert.equal(validateOutput(valid,policy).summary_key,'growth');
  for(const value of [
-  {...valid,summary:'Sell 999 units tomorrow.'},
-  {...valid,summary:'<script>bad</script>'},
-  {...valid,sections:[{...valid.sections[0],fact_ids:['weather_forecast']}]},
-  {...valid,sections:[valid.sections[0],valid.sections[0]]}
+  {summary_key:'unknown',section_keys:['demand']},
+  {summary_key:'growth',section_keys:['weather']},
+  {summary_key:'growth',section_keys:['demand','demand']},
+  {summary_key:'growth',section_keys:['discount','discount']}
  ])assert.throws(()=>validateOutput(value,policy));
  assert.throws(()=>resolveFacts('{{unverified}}',policy,'en'));
 });
@@ -51,13 +51,13 @@ test('deterministic adapter implements the suggestion contract and stays test-on
 });
 
 test('Gemini adapter uses the bounded suggestion schema',async()=>{
- const ctx=context(),valid=expandSelection({summary_key:'growth',section_keys:['demand','restock']},ctx.policy);
- const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.generationConfig.responseMimeType,'application/json');assert.equal(body.generationConfig.responseJsonSchema.properties.sections.maxItems,4);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(valid)}]}}]});};
+ const ctx=context(),valid={summary_key:'growth',section_keys:['demand','restock']};
+ const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.generationConfig.responseMimeType,'application/json');assert.equal(body.generationConfig.responseJsonSchema.properties.section_keys.maxItems,4);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(valid)}]}}]});};
  const provider=new GeminiProvider('gemini-2.5-flash','unit-test-key',1500,transport);const output=await provider.generateInventoryInsights(facts,'bn',ctx);assert.equal(validateOutput(output,ctx.policy).summary_key,'growth');
 });
 
 test('OpenRouter adapter forces one grounded suggestion tool call',async()=>{
- const ctx=context(),valid=expandSelection({summary_key:'growth',section_keys:['demand','discount']},ctx.policy);
+ const ctx=context(),valid={summary_key:'growth',section_keys:['demand','discount']};
  const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.tools.length,1);assert.deepEqual(body.tools[0].function.parameters,buildPrompt(facts,'bn',ctx.policy,ctx.promptVersion).schema);return Response.json({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'select_inventory_insight',arguments:JSON.stringify(valid)}}]}}]});};
  const provider=new OpenRouterProvider('nvidia/nemotron-3-ultra-550b-a55b:free','key',1500,transport);const output=await provider.generateInventoryInsights(facts,'bn',ctx);assert.equal(validateOutput(output,ctx.policy).summary_key,'growth');
 });

@@ -8,9 +8,9 @@ test('suggestion center turns bounded forecast signals into actionable cards',()
  assert.equal(cards.length,4);
  assert.match(cards.find(c=>c.id==='demand')!.title,/Coke/);
  assert.match(cards.find(c=>c.id==='restock')!.href,/purchases\/new\?products=/);
- assert.match(cards.find(c=>c.id==='discount')!.description,/Demand response is uncertain/);
+ assert.match(cards.find(c=>c.id==='discount')!.description,/More demand is not guaranteed/);
  assert.match(cards.find(c=>c.id==='stagnant')!.description,/45 days/);
- assert.equal(forecastConfidenceLabel(facts.forecast.top_sellers[0].confidence,'en'),'High confidence');
+ assert.equal(forecastConfidenceLabel(facts.forecast.top_sellers[0].confidence,'en'),'Strong sales history');
 });
 
 test('discount suggestion is absent when no safe discount candidate exists',()=>{

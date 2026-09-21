@@ -50,7 +50,7 @@ test('draft isolation, responsive POS, lost checkout response and same-receipt r
 });
 
 test('missing AI keeps deterministic forecasts, suggestions and keyboard dialog focus',async({page})=>{
- await login(page);await page.goto('/insights');await expect(page.getByRole('heading',{name:/What you can act on now|এখন কী করা যেতে পারে/})).toBeVisible();await expect(page.getByRole('heading',{name:'Demand forecast by product',exact:true})).toBeVisible();await page.getByRole('button',{name:'Generate AI suggestions',exact:true}).click();await expect(page.getByText('OPENROUTER_API_KEY is missing',{exact:false})).toBeVisible();await expect(page.getByRole('heading',{name:'Demand forecast by product',exact:true})).toBeVisible();
+ await login(page);await page.goto('/insights');await expect(page.getByLabel('Insight language')).toHaveValue('en');await expect(page.getByRole('heading',{name:'Recommended actions',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Demand forecast by product',exact:true})).toBeVisible();await page.getByRole('button',{name:'Generate AI suggestions',exact:true}).click();await expect(page.getByText('OPENROUTER_API_KEY is missing',{exact:false})).toBeVisible();await expect(page.getByRole('heading',{name:'Demand forecast by product',exact:true})).toBeVisible();
  await page.goto('/categories');const trigger=page.getByRole('button',{name:'Add category',exact:true});await trigger.focus();await page.keyboard.press('Enter');await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByLabel('Category name',{exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).not.toBeVisible();await expect(trigger).toBeFocused();
 });
 

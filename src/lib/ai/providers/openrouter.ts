@@ -41,7 +41,7 @@ export class OpenRouterProvider implements InventoryInsightProvider{
        type:'function',
        function:{
         name:TOOL_NAME,
-        description:'Select only the approved inventory insight wording supplied by the application.',
+        description:'Select only approved summary and suggestion priority keys supplied by the application.',
         parameters:prompt.schema
        }
       }],

@@ -44,6 +44,8 @@ export function buildPolicy(facts:InventoryFacts,language:Language):InsightPolic
 function sameIds(left:string[],right:string[]){return left.length===right.length&&new Set(left).size===left.length&&left.every(id=>right.includes(id));}
 export function validateOutput(raw:unknown,policy:InsightPolicy):InsightSelection{
  if(JSON.stringify(raw).length>18_000)throw new AppError('AI_INVALID_OUTPUT');
+ const direct=selectionSchema.safeParse(raw);
+ if(direct.success&&direct.data.section_keys.every(key=>Boolean(policy.sections[key])))return direct.data;
  const parsed=outputSchema.safeParse(raw);if(!parsed.success)throw new AppError('AI_INVALID_OUTPUT');
  const output=parsed.data,summary=Object.entries(policy.summaries).find(([,text])=>text===output.summary)?.[0];
  if(!summary)throw new AppError('AI_INVALID_OUTPUT');
@@ -53,7 +55,7 @@ export function validateOutput(raw:unknown,policy:InsightPolicy):InsightSelectio
   if(!entry)throw new AppError('AI_INVALID_OUTPUT');
   sectionKeys.push(entry[0]);
  }
- const selection=selectionSchema.safeParse({summary_key:summary,section_keys:sectionKeys});if(!selection.success)throw new AppError('AI_INVALID_OUTPUT');
+ const selection=selectionSchema.safeParse({summary_key:summary,section_keys:sectionKeys});if(!selection.success||!selection.data.section_keys.every(key=>Boolean(policy.sections[key])))throw new AppError('AI_INVALID_OUTPUT');
  return selection.data;
 }
 export function expandSelection(selection:InsightSelection,policy:InsightPolicy):InsightOutput{
