@@ -1,89 +1,71 @@
-import type {InventoryFacts,Language} from './contracts';
+import type {InventoryFacts,Language,ProductForecastSignal} from './contracts';
 import {money} from '../money';
 
-export type InsightActionKind='stock'|'sales'|'purchases'|'inventory';
-export type InsightActionTone='urgent'|'attention'|'positive'|'neutral';
-
-export interface InsightAction {
+export type SuggestionKind='demand'|'restock'|'discount'|'stagnant';
+export type SuggestionTone='positive'|'attention'|'neutral'|'urgent';
+export interface SuggestionCard {
  id:string;
- kind:InsightActionKind;
- tone:InsightActionTone;
- label:string;
+ kind:SuggestionKind;
  title:string;
  description:string;
+ metric:string;
+ detail:string;
  href:string;
  cta:string;
- secondaryHref?:string;
- secondaryCta?:string;
- metric:string;
+ confidence?:ProductForecastSignal['confidence'];
+ tone:SuggestionTone;
 }
 
-function bnDigits(value:string){return value.replace(/[0-9]/g,d=>String.fromCharCode(0x09e6+Number(d)));}
-function localNumber(value:number,language:Language){const text=String(value);return language==='bn'?bnDigits(text):text;}
-function localMoney(value:string,language:Language){const text=money(value);return language==='bn'?bnDigits(text):text;}
+function digits(value:string,language:Language){return language==='bn'?value.replace(/[0-9]/g,d=>String.fromCharCode(0x09e6+Number(d))):value;}
+function n(value:number,language:Language){return digits(String(value),language);}
+function m(value:string,language:Language){return digits(money(value),language);}
 
-export function stockHealthPercent(facts:InventoryFacts){
- if(facts.inventory.active_count<=0)return 100;
- return Math.max(0,Math.min(100,Math.round((facts.inventory.in_stock/facts.inventory.active_count)*100)));
-}
-
-export function buildInsightActions(facts:InventoryFacts,language:Language):InsightAction[]{
+export function forecastConfidenceLabel(value:ProductForecastSignal['confidence'],language:Language){
  const bn=language==='bn';
- const date=encodeURIComponent(facts.business_date);
- const attentionIds=facts.attention.filter(item=>item.shortage>0).slice(0,5).map(item=>item.id);
+ return value==='high'?(bn?'উচ্চ confidence':'High confidence'):value==='medium'?(bn?'মাঝারি confidence':'Medium confidence'):(bn?'কম confidence':'Low confidence');
+}
 
- const stockAction:InsightAction=facts.inventory.attention_count>0?{
-  id:'stock',kind:'stock',tone:facts.inventory.out_of_stock>0?'urgent':'attention',
-  label:bn?'সর্বোচ্চ অগ্রাধিকার':'Top priority',
-  title:bn?`${localNumber(facts.inventory.attention_count,language)}টি পণ্যের স্টক ঠিক করুন`:`Restock ${localNumber(facts.inventory.attention_count,language)} products`,
+export function buildSuggestionCards(facts:InventoryFacts,language:Language):SuggestionCard[]{
+ const bn=language==='bn',f=facts.forecast;
+ const top=f.top_sellers[0],restock=f.restock_candidates[0],discount=f.discount_candidates[0],stale=f.stagnant_products[0];
+ const cards:SuggestionCard[]=[];
+ if(top)cards.push({
+  id:'demand',kind:'demand',tone:'positive',confidence:top.confidence,
+  title:bn?`${top.name} সবচেয়ে বেশি বিক্রি হচ্ছে`:`${top.name} is leading demand`,
   description:bn
-   ?`${localNumber(facts.inventory.out_of_stock,language)}টি out of stock এবং ${localNumber(facts.inventory.low_stock,language)}টি minimum-এর নিচে। Suggested gap review করে supplier ও quantity নিশ্চিত করুন।`
-   :`${localNumber(facts.inventory.out_of_stock,language)} are out of stock and ${localNumber(facts.inventory.low_stock,language)} are below minimum. Review suggested gaps, supplier and quantities before receiving.`,
-  href:attentionIds.length?`/purchases/new?products=${attentionIds.join(',')}`:'/inventory/low-stock',
-  cta:bn?'Replenishment purchase তৈরি করুন':'Create replenishment purchase',
-  secondaryHref:'/inventory/low-stock',secondaryCta:bn?'সব stock alert দেখুন':'Review all stock alerts',
-  metric:`${localNumber(facts.inventory.out_of_stock,language)} / ${localNumber(facts.inventory.low_stock,language)}`
- }:{
-  id:'stock',kind:'stock',tone:'positive',label:bn?'স্টক অবস্থান':'Stock position',
-  title:bn?'সব active পণ্য minimum পূরণ করছে':'All active products meet minimum',
-  description:bn?'বর্তমান recorded minimum অনুযায়ী কোনো low-stock বা out-of-stock alert নেই।':'There are no low-stock or out-of-stock alerts against recorded minimums.',
-  href:'/inventory',cta:bn?'Inventory দেখুন':'View inventory',metric:'100%'
- };
-
- const salesAction:InsightAction=facts.sales.count>0?{
-  id:'sales',kind:'sales',tone:'positive',label:bn?'আজকের বিক্রয়':'Today’s sales',
-  title:bn?`${localNumber(facts.sales.count,language)}টি sale · ${localMoney(facts.sales.total_paisa,language)}`:`${localNumber(facts.sales.count,language)} sales · ${localMoney(facts.sales.total_paisa,language)}`,
-  description:bn?`আজ ${localNumber(facts.sales.units,language)}টি selling unit বিক্রি হয়েছে। Net sales review করে receipt-level detail দেখুন।`:`${localNumber(facts.sales.units,language)} selling units were sold today. Review net sales and receipt-level detail.`,
-  href:`/reports/sales?from=${date}&to=${date}`,cta:bn?'Sales report খুলুন':'Open sales report',
-  secondaryHref:'/sales',secondaryCta:bn?'Receipts দেখুন':'View receipts',metric:localMoney(facts.sales.total_paisa,language)
- }:{
-  id:'sales',kind:'sales',tone:'neutral',label:bn?'আজকের বিক্রয়':'Today’s sales',
-  title:bn?'আজ এখনো completed sale নেই':'No completed sale yet today',
-  description:bn?'পরবর্তী customer sale শুরু করতে POS খুলুন।':'Open POS when the next customer sale starts.',
-  href:'/pos',cta:bn?'POS খুলুন':'Open POS',metric:localMoney('0',language)
- };
-
- const purchaseAction:InsightAction=facts.purchases.count>0?{
-  id:'purchases',kind:'purchases',tone:'neutral',label:bn?'আজকের stock in':'Today’s stock in',
-  title:bn?`${localNumber(facts.purchases.count,language)}টি received purchase`:`${localNumber(facts.purchases.count,language)} received purchases`,
-  description:bn?`আজ received goods-এর recorded value ${localMoney(facts.purchases.total_paisa,language)}। Draft purchase এই মোটে নেই।`:`Today’s received goods total ${localMoney(facts.purchases.total_paisa,language)}. Draft purchases are excluded.`,
-  href:`/reports/purchases?from=${date}&to=${date}`,cta:bn?'Purchase report খুলুন':'Open purchase report',
-  secondaryHref:'/purchases',secondaryCta:bn?'Purchase history':'Purchase history',metric:localMoney(facts.purchases.total_paisa,language)
- }:{
-  id:'purchases',kind:'purchases',tone:facts.inventory.attention_count>0?'attention':'neutral',label:bn?'আজকের stock in':'Today’s stock in',
-  title:bn?'আজ কোনো purchase receive হয়নি':'No purchase received today',
-  description:bn?'প্রয়োজনে supplier select করে goods received record করুন। Draft save করলে stock বদলাবে না।':'Record received goods when stock arrives. Saving a draft will not change stock.',
-  href:'/purchases/new',cta:bn?'নতুন purchase':'New purchase',metric:localMoney('0',language)
- };
-
- const inventoryAction:InsightAction={
-  id:'inventory',kind:'inventory',tone:'neutral',label:bn?'Stock value snapshot':'Stock value snapshot',
-  title:bn?`Estimated stock ${localMoney(facts.inventory.value_paisa,language)}`:`Estimated stock ${localMoney(facts.inventory.value_paisa,language)}`,
-  description:facts.highest_category
-   ?(bn?`${facts.highest_category.name} category-তে সর্বোচ্চ reference-cost estimate আছে। এটি accounting valuation বা profit নয়।`:`${facts.highest_category.name} has the highest current reference-cost estimate. This is not accounting valuation or profit.`)
-   :(bn?'Current reference cost অনুযায়ী inventory mix review করুন।':'Review the current inventory mix using reference costs.'),
-  href:'/reports/inventory',cta:bn?'Inventory report খুলুন':'Open inventory report',metric:`${stockHealthPercent(facts)}%`
- };
-
- return [stockAction,salesAction,purchaseAction,inventoryAction];
+   ?`গত ৩০ দিনে ${n(top.units_30d,language)} ${top.unit} বিক্রি হয়েছে। সাম্প্রতিক velocity, trend ও weekday pattern ধরে আগামী ৭ দিনে প্রায় ${n(top.forecast_7d_units,language)} ${top.unit} demand হতে পারে।`
+   :`${n(top.units_30d,language)} ${top.unit} sold in the last 30 days. Based on recent velocity, trend and weekday pattern, about ${n(top.forecast_7d_units,language)} ${top.unit} may sell over the next 7 days.`,
+  metric:`${n(top.forecast_7d_units,language)} / 7d`,
+  detail:`${forecastConfidenceLabel(top.confidence,language)} · ${top.trend_pct>=0?'+':''}${n(top.trend_pct,language)}% trend`,
+  href:'/reports/sales',cta:bn?'Sales report দেখুন':'Open sales report'
+ });
+ if(restock)cards.push({
+  id:'restock',kind:'restock',tone:restock.stock_cover_days!==null&&restock.stock_cover_days<7?'urgent':'attention',confidence:restock.confidence,
+  title:bn?`${restock.name} stock বাড়ান`:`Increase ${restock.name} stock`,
+  description:bn
+   ?`বর্তমান stock ${n(restock.quantity,language)} ${restock.unit}। Forecast অনুযায়ী ১৪ দিনের demand ও safety buffer ধরলে প্রায় ${n(restock.suggested_restock_qty,language)} ${restock.unit} অতিরিক্ত stock review করা উচিত।`
+   :`Current stock is ${n(restock.quantity,language)} ${restock.unit}. A 14-day demand target plus safety buffer suggests reviewing about ${n(restock.suggested_restock_qty,language)} additional ${restock.unit}.`,
+  metric:restock.stock_cover_days===null?'—':`${n(restock.stock_cover_days,language)}d cover`,
+  detail:`${forecastConfidenceLabel(restock.confidence,language)} · next 7d ${n(restock.forecast_7d_units,language)} ${restock.unit}`,
+  href:`/purchases/new?products=${restock.id}`,cta:bn?'Purchase draft খুলুন':'Open purchase draft'
+ });
+ if(discount)cards.push({
+  id:'discount',kind:'discount',tone:'neutral',
+  title:bn?`${discount.name}-এ ${n(discount.discount_opportunity_pct,language)}% test discount বিবেচনা করুন`:`Consider a ${n(discount.discount_opportunity_pct,language)}% test discount on ${discount.name}`,
+  description:bn
+   ?`পণ্যটি ${n(discount.days_without_sale??0,language)} দিন sale ছাড়া আছে। এই discount-এর পরও বর্তমান reference cost ধরে unit profit প্রায় ${m(discount.discounted_unit_profit_paisa,language)} থাকবে। Demand response নিশ্চিত নয়—ছোট test campaign হিসেবে ব্যবহার করুন।`
+   :`The item has gone ${n(discount.days_without_sale??0,language)} days without a sale. At this discount, estimated unit profit remains about ${m(discount.discounted_unit_profit_paisa,language)} using current reference cost. Demand response is uncertain, so use it as a small test campaign.`,
+  metric:`${n(discount.discount_opportunity_pct,language)}% test`,detail:`margin ${n(discount.margin_pct,language)}% · ${n(discount.quantity,language)} in stock`,
+  href:'/products',cta:bn?'Product pricing দেখুন':'Review product pricing'
+ });
+ if(stale)cards.push({
+  id:'stagnant',kind:'stagnant',tone:'attention',
+  title:bn?`${stale.name} slow-moving stock`:`${stale.name} is slow-moving stock`,
+  description:bn
+   ?`${n(stale.days_without_sale??0,language)} দিন ধরে sale নেই, কিন্তু ${n(stale.quantity,language)} ${stale.unit} stock আছে। Reorder pause, display/promotion test, অথবা price review বিবেচনা করুন।`
+   :`There has been no sale for ${n(stale.days_without_sale??0,language)} days while ${n(stale.quantity,language)} ${stale.unit} remain in stock. Consider pausing reorder, testing merchandising/promotion, or reviewing price.`,
+  metric:`${n(stale.days_without_sale??0,language)} days`,detail:`${n(stale.quantity,language)} ${stale.unit} on hand`,
+  href:'/inventory',cta:bn?'Inventory দেখুন':'Open inventory'
+ });
+ return cards;
 }

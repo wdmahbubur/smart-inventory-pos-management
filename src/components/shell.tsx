@@ -14,7 +14,7 @@ const navigation=[
  {label:'Workspace',items:[{href:'/dashboard',label:'Dashboard',icon:LayoutDashboard},{href:'/products',label:'Products',icon:Package},{href:'/categories',label:'Categories',icon:Shapes},{href:'/suppliers',label:'Suppliers',icon:Truck}]},
  {label:'Operations',items:[{href:'/purchases',label:'Purchases',icon:ShoppingBag},{href:'/pos',label:'Point of sale',icon:ShoppingCart},{href:'/sales',label:'Sales',icon:ReceiptText}]},
  {label:'Stock control',items:[{href:'/inventory',label:'Inventory',icon:Boxes},{href:'/inventory/movements',label:'Stock history',icon:History},{href:'/inventory/low-stock',label:'Low stock',icon:TriangleAlert}]},
- {label:'Insights',items:[{href:'/reports',label:'Reports',icon:ChartNoAxesCombined},{href:'/insights',label:'AI insights',icon:Sparkles}]}
+ {label:'Insights',items:[{href:'/reports',label:'Reports',icon:ChartNoAxesCombined},{href:'/insights',label:'AI suggestions',icon:Sparkles}]}
 ];
 function activeRoute(path:string,href:string){if(href==='/inventory')return path==='/inventory';return path===href||path.startsWith(href+'/');}
 export function Shell({workspace,children}:{workspace:Workspace;children:React.ReactNode}){

@@ -23,7 +23,7 @@ OPENROUTER_TEXT_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
 AI_REQUEST_TIMEOUT_MS=30000
 AI_MAX_REQUESTS_PER_HOUR=10
 AI_MAX_OUTPUT_TOKENS=1500
-AI_PROMPT_VERSION=inventory-insights-v1
+AI_PROMPT_VERSION=inventory-suggestions-v2
 ```
 
 The API key is server-only. Never prefix it with `NEXT_PUBLIC_`, commit it, expose it in browser code, or store it in Supabase business tables.
@@ -40,9 +40,9 @@ The free endpoint is rate limited and its model page warns against sending confi
 
 Facts include version/hash, snapshot timestamp, Dhaka date, revision, stock status counts, bounded attention examples and shortages, current reference-cost estimate/category values, and today's posted sales/purchases. Totals cover all records; attention examples have explicit truncation metadata.
 
-The application prepares approved short summary/section templates bound to fact placeholders. The provider may only select from those approved strings and fact IDs. Persistence stores only validated selection keys. Display resolves numbers from the server fact map, including Bengali digits.
+The database deterministically prepares bounded product-level demand forecasts and business signals from posted sales, captured product costs, current stock, margin, recency and a store-wide weekday factor. The application then prepares approved suggestion/explanation templates bound to those verified values. The provider may only select and prioritize approved strings and fact IDs; persistence stores only validated selection keys. Display resolves numbers from the server fact map, including Bengali digits.
 
-This intentionally restrictive design prevents the model from inventing quantities, calculating profit, predicting demand, running SQL or changing stock. Unknown IDs/placeholders, numeric claims outside the approved policy, HTML, arbitrary URLs and oversized output are rejected. Product/category names remain untrusted data, never instructions.
+The provider still cannot invent quantities, weather, market events, demand elasticity, URLs, SQL or stock changes. Forecasts are estimates rather than guarantees, and discount opportunities are controlled tests that retain a margin floor over current reference cost. Unknown IDs/placeholders, numeric claims outside the approved policy, HTML, arbitrary URLs and oversized output are rejected. Product/category names remain untrusted data, never instructions.
 
 A successful response records provider, model, language, prompt version, facts hash, store revision, business date, snapshot and generation time. A previous response becomes stale when data changes or the Dhaka business date rolls over.
 

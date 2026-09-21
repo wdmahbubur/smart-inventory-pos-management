@@ -61,7 +61,7 @@ As an alternative for an **empty hosted Supabase database**, `DATABASE_URL=... A
 | `AI_REQUEST_TIMEOUT_MS` | Server | 30000 by default. |
 | `AI_MAX_REQUESTS_PER_HOUR` | Server | 10 maximum per store; application quota, not Google's quota. |
 | `AI_MAX_OUTPUT_TOKENS` | Server | 1500 default. |
-| `AI_PROMPT_VERSION` | Server | `inventory-insights-v1`. |
+| `AI_PROMPT_VERSION` | Server | `inventory-suggestions-v2`; legacy `inventory-insights-v1` is upgraded by the application. |
 
 Changes to public values require a rebuild. Never paste secrets into issues, commits, client components or support logs. Missing Supabase configuration displays an explicit setup state rather than fabricated business data. Missing AI configuration does not block inventory or checkout. OpenRouter free-model availability and quotas are external to this application.
 
@@ -114,7 +114,7 @@ SEED_ALLOW_LOCAL_DEMO=1 DATABASE_URL=... DEMO_OWNER_ID=... DEMO_STATE=post-sale 
 
 `vercel.json` selects Next.js, `npm ci`, the production build, and a 60-second AI function limit. In Vercel, import this GitHub repository and select the completed implementation branch (or the reviewed merge into `master`). Use Node 22.x and set the three required Supabase/origin variables in the intended environment before building. Set optional AI provider variables only as server-side environment values. For the requested OpenRouter setup, add `OPENROUTER_API_KEY`; the reviewed model slug is the default. Keep preview callback URLs separately allowlisted; do not reuse an unrelated application's project or database.
 
-After a deployment reaches Ready, verify on the **actual live origin**: register/confirm, empty catalog, create product, receive goods, save a separate draft, complete a discounted cash sale, print, inspect movements/low stock, export reports, deny another owner, and verify AI setup/error or one real generated summary. A Vercel build does not apply database migrations.
+After a deployment reaches Ready, verify on the **actual live origin**: register/confirm, empty catalog, create product, receive goods, save a separate draft, complete a discounted cash sale, print, inspect movements/low stock, export reports, deny another owner, and verify AI setup/error or one real generated suggestion explanation. A Vercel build does not apply database migrations.
 
 A live deployment is not claimed until a dedicated hosted Supabase project is explicitly approved, migrated, and connected to Vercel. The connected Vercel account is available; production environment/import and the optional real Gemini smoke test are release setup steps that must be verified on the actual live origin.
 

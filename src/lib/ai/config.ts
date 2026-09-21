@@ -51,11 +51,13 @@ export function readAIConfig(env:Record<string,string|undefined>):AIConfig{
  const timeoutMs=Number(clean(env.AI_REQUEST_TIMEOUT_MS)??30000);
  const maxTokens=Number(clean(env.AI_MAX_OUTPUT_TOKENS)??1500);
  const quota=Number(clean(env.AI_MAX_REQUESTS_PER_HOUR)??10);
+ const configuredPromptVersion=clean(env.AI_PROMPT_VERSION);
+ const promptVersion=!configuredPromptVersion||configuredPromptVersion==='inventory-insights-v1'?'inventory-suggestions-v2':configuredPromptVersion;
  if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>30000||!Number.isInteger(maxTokens)||maxTokens<256||maxTokens>3000||!Number.isInteger(quota)||quota<1||quota>10)throw new AppError('AI_NOT_CONFIGURED');
 
  return {
   provider,model,key,timeoutMs,maxTokens,quota,
-  promptVersion:clean(env.AI_PROMPT_VERSION)??'inventory-insights-v1',
+  promptVersion,
   appUrl:clean(env.APP_URL)
  };
 }
