@@ -75,33 +75,30 @@ create or replace function public.get_workspace() returns jsonb language sql sta
  catalog as (select p.id,p.name,p.sku,p.unit,p.minimum_stock,p.icon_key,p.color_key,c.id category_id,c.name category_name,b.quantity,b.quantity::numeric*p.reference_cost_paisa stock_value_paisa,
  case when b.quantity=0 then 'out_of_stock' when b.quantity<p.minimum_stock then 'low_stock' else 'in_stock' end stock_status,greatest(p.minimum_stock-b.quantity,0) shortage
  from public.products p join public.inventory_balances b on b.product_id=p.id join public.categories c on c.id=p.category_id where p.store_id=(select id from ctx) and p.archived_at is null),
- sale_docs as (select s.* from public.sales s,bounds b where s.store_id=(select id from ctx) and s.completed_at>=b.start_at and s.completed_at<b.start_at),
- purchase_docs as (select p.* from public.purchases p,bounds b where p.store_id=(select id from ctx) and p.status='received' and p.received_at>=b.start_at and p.received_at<b.start_at),
- attention as (select * from catalog where stock_status<>'in_stock' order by (quantity<>0) desc,lower(name),id),
- category_value as (select category_id id,max(category_name) name,sum(stock_value_paisa) value_paisa,count(*) product_count from catalog group by category_id),
- recent as (
-  select s._id id,s.number,'sale'::text kind,s.total_paisa,s.completed_at activity_at,coalesce(sum(si.quantity),0)::text||' units × '||count(si.id)::text||' Products' detail from sale_docs s left join public.sale_items si on si.sale_id=s.id group by s.id,s.number,s.total_paisa,s.completed_at
-  union all
-  select p.id,p.number,'purchase',p.total_paisa,p.received_at,coalesce(sum(pi.quantity),0)::text||' units × '||count(pi.id)::text||' Products' from purchase_docs p left join public.purchase_items pi on pi.id=pid group by p.id,p.number,p.total_paisa,p.received_at
- )
- select jsonb_build_object(
- 'store',(select to_jsonb(s)-'next_purchase_number'-'next_sale_number' from ctx s),
+ sale_docs as (select s.* from public.sales s,bounds b where s.store_id=(select id from ctx) and s.completed_at>=b.start_at and s.completed_at<b.start_at+interval '1 day'),
+ purchase_docs as (select p.* from public.purchases p,bounds b where p.store_id=(select id from ctx) and p.status='received' and p.received_at>=b.start_at and p.received_at<b.start_at+interval '1 day'),
+ category_values as (select category_id id,category_name name,sum(stock_value_paisa) value_paisa,count(*) product_count from catalog group by category_id,category_name),
+ ordered_categories as (select *,row_number() over(order by value_paisa desc,name,id) rank from category_values),
+ chart_categories as (select id::text id,name,value_paisa,product_count from ordered_categories where rank<=20 union all select 'others','Others',sum(value_paisa),sum(product_count) from ordered_categories where rank>20 having count(*)>0),
+ attention as (select * from catalog where stock_status<>'in_stock' order by (quantity=0) desc,lower(name),id limit 20),
+ recent as (select id,number,'sale' kind,total_paisa,completed_at activity_at,coalesce(customer_name,'Walk-in customer') detail from public.sales where store_id=(select id from ctx) union all select id,number,'purchase',total_paisa,received_at,supplier_name_snapshot from public.purchases where store_id=(select id from ctx) and status='received'),
+ recent_page as (select * from recent order by activity_at desc,id desc limit 5)
+ select private.safe_json(jsonb_build_object(
+ 'store',(select to_jsonb(ctx)-'next_purchase_number'-'next_sale_number'-'demo_clock' from ctx),
  'profile',(select to_jsonb(p) from public.profiles p where id=auth.uid()),
  'snapshot_at',(select snapshot_at from ctx),'business_date',(select business_date from bounds),'data_revision',(select data_revision::text from ctx),
- 'inventory',jsonb_build_object('active_count',(select count(*) from catalog),'category_count',(select count(distinct category_id) from catalog),'in_stock',(select count() from catalog where stock_status='in_stock'),'low_stock',(select count() from catalog where stock_status='low_stock'),'out_of_stock',(select count(*) from catalog where stock_status='out_of_stock'),'attention_count',(select count() from catalog where stock_status<>'in_stock'),'units',(select coalesce(sum(quantity),0) from catalog),'value_paisa',(select coalesce(sum(stock_value_paisa),0)::text from catalog),
- 'sales',jsonb_build_object('count',(select count(*) from sale_docs),'total_paisa',(select coalesce(sum(total_paisa),0)::text from sale_docs),'units',(select coalesce(sum(quantity),0) from public.sale_items i where i.sale_id in (select id from sale_docs)),'cogs_paisa',(select coalesce(sum(line_cost_paisa),0)::text from public.sale_items i where i.sale_id in (select id from sale_docs)),'net_profit_paisa',((select coalesce(sum(total_paisa),0) from sale_docs)-(select coalesce(sum(line_cost_paisa),0) from public.sale_items i where i.sale_id in (select id from sale_docs)))::text),
- 'purchases',jsonb_build_object('count',(select count(*) from purchase_docs),'total_paisa',(select coalesce(sum(total_paisa),0)::text from purchase_docs),'units',(select coalesce(sum(quantity),0) from public.purchase_items i where i.purchase_id in (select id from purchase_docs)),
- 'attention',coalesce((select jsonb_agg(to_jsonb(a) order by (a.quantity<>0) desc,lower(a.name),a.id) from (select * from attention limit 20) a),'[]'),'attention_truncated',(select count(*)>20 from attention),
- 'categories',coalesce((select jsonb_agg(to_jsonb(c) - 'rn' order by c.\"value_paisa\" desc,c.id) from (select *,row_number() over(order by value_paisa desc,id) rn from category_value limit 10) c),'[]'),'highest_category',(select to_jsonb(c)-'product_count' from category_value c order by value_paisa desc,id limit 1),
- 'recent',coalesce((select jsonb_agg(to_jsonb(r) order by r.activity_at desc,r.id desc) from (select * from recent order by activity_at desc,id desc limit 6) r),'[]')
- ) from ctx;
+ 'inventory',jsonb_build_object('active_count',(select count(*) from catalog),'category_count',(select count(distinct category_id) from catalog),'in_stock',(select count(*) from catalog where stock_status='in_stock'),'low_stock',(select count(*) from catalog where stock_status='low_stock'),'out_of_stock',(select count(*) from catalog where stock_status='out_of_stock'),'attention_count',(select count(*) from catalog where stock_status<>'in_stock'),'units',(select coalesce(sum(quantity),0) from catalog),'value_paisa',(select coalesce(sum(stock_value_paisa),0)::text from catalog)),
+ 'sales',jsonb_build_object('count',(select count(*) from sale_docs),'total_paisa',(select coalesce(sum(total_paisa),0)::text from sale_docs),'discount_paisa',(select coalesce(sum(discount_paisa),0)::text from sale_docs),'units',(select coalesce(sum(i.quantity),0) from public.sale_items i join sale_docs d on d.id=i.sale_id),'cogs_paisa',(select coalesce(sum(i.line_cost_paisa),0)::text from public.sale_items i join sale_docs d on d.id=i.sale_id),'net_profit_paisa',((select coalesce(sum(total_paisa),0) from sale_docs)-(select coalesce(sum(i.line_cost_paisa),0) from public.sale_items i join sale_docs d on d.id=i.sale_id))::text),
+ 'purchases',jsonb_build_object('count',(select count(*) from purchase_docs),'total_paisa',(select coalesce(sum(total_paisa),0)::text from purchase_docs),'units',(select coalesce(sum(i.quantity),0) from public.purchase_items i join purchase_docs d on d.id=i.purchase_id)),
+ 'attention',coalesce((select jsonb_agg(to_jsonb(attention)) from attention),'[]'),'attention_truncated',(select count(*)>20 from catalog where stock_status<>'in_stock'),
+ 'categories',coalesce((select jsonb_agg(to_jsonb(chart_categories) order by value_paisa desc,name) from chart_categories),'[]'),
+ 'highest_category',(select to_jsonb(category_values) from category_values order by value_paisa desc,name,id limit 1),
+ 'recent',coalesce((select jsonb_agg(to_jsonb(recent_page)) from recent_page),'[]')))
 $$;
 
-create or replace function public.get_report(p_kind text,p_filters jsob default '{}',p_export boolean default false) returns jsonb language plpgsql stable security definer set search_path='' set plan_cache_mode=force_custom_plan as $$
-declare
- sid uuid:=private.store_id(); f jsonb:=coalesce(p_filters,'{}'); result jsob; ws jsob; listing jsonb;
- day date:=private.business_clock(sid) at time zone 'Asia/Dhaka'; first_day date; last_day date; start_at timestamptz; end_at timestamptz;
- lim integer:=coalesce((f->>'size')::integer,20); offst integer:=(coalesce((f->>'page')::integer,1)-1)*lim;
+
+create or replace function public.get_report(p_kind text,p_filters jsonb default '{}',p_export boolean default false) returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare sid uuid:=private.store_id(); result jsonb; ws jsonb; listing jsonb; f jsonb:=p_filters; day date:=(private.business_clock(sid) at time zone 'Asia/Dhaka')::date; first_day date; last_day date; start_at timestamptz; end_at timestamptz; lim integer:=coalesce((f->>'size')::integer,20); offst integer:=(coalesce((f->>'page')::integer,1)-1)*lim;
 begin
  perform private.validate_filters(f);
  if p_kind='inventory' then
@@ -109,10 +106,10 @@ begin
   ws:=public.get_workspace(); listing:=public.list_catalog('products',f);
   with records as (
    select p.id,p.name,p.sku,p.unit,c.name category_name,b.quantity,p.minimum_stock,p.reference_cost_paisa,b.quantity::numeric*p.reference_cost_paisa stock_value_paisa,case when b.quantity=0 then 'out_of_stock' when b.quantity<p.minimum_stock then 'low_stock' else 'in_stock' end stock_status
-   from public.products p ioin public.inventory_balances b on b.product_id=p.id join public.categories c on c.id=p.category_id where p.store_id=sid and p.archived_at is null
+   from public.products p join public.inventory_balances b on b.product_id=p.id join public.categories c on c.id=p.category_id where p.store_id=sid and p.archived_at is null
    and (coalesce(f->>'q','')='' or position(lower(f->>'q') in lower(p.name||' '||p.sku))>0) and (nullif(f->>'category','') is null or p.category_id=(f->>'category')::uuid)
-  ),filtered as (select * from records where coalesce(f->>'stock','')='' or stock_status=f->>'stock' or f->>'stock'='attention' and stock_status<>'pin_stock'),export_page as (select * from filtered order by lower(name),id limit 100001)
-  select jsonb_build_object('kind',p_kind,'snapshot_at',ws->'snapshot_at','business_date',day,'summary',ws->'inventory','chart',ws->'categories','rows',listing->'rows','total',listing->'total','filtered_value_paisa',listing->'filtered_value_paisa','page',offset/lim+1,'size',lim,'source_count',(select count() from filtered),'source_rows',case when p_export then coalesce((select jsonb_agg(to_jsonb(export_page)) from export_page),'[]') else '[]'::jsonb end) into result;
+  ),filtered as (select * from records where coalesce(f->>'stock','')='' or stock_status=f->>'stock' or f->>'stock'='attention' and stock_status<>'in_stock'),export_page as (select * from filtered order by lower(name),id limit 100001)
+  select jsonb_build_object('kind',p_kind,'snapshot_at',ws->'snapshot_at','business_date',day,'summary',ws->'inventory','chart',ws->'categories','rows',listing->'rows','total',listing->'total','filtered_value_paisa',listing->'filtered_value_paisa','page',offst/lim+1,'size',lim,'source_count',(select count(*) from filtered),'source_rows',case when p_export then coalesce((select jsonb_agg(to_jsonb(export_page)) from export_page),'[]') else '[]'::jsonb end) into result;
  else
   first_day:=coalesce((f->>'from')::date,day); last_day:=coalesce((f->>'to')::date,day);
   f:=f||jsonb_build_object('from',first_day,'to',last_day); perform private.validate_filters(f);
@@ -136,7 +133,7 @@ begin
    export_page as (select purchase_id,number,supplier_id,supplier_name_snapshot,received_at,purchase_date,product_id,product_name_snapshot,sku_snapshot,unit_snapshot,quantity,unit_cost_paisa,line_total_paisa from lines order by received_at,purchase_id,line_position limit 100001)
    select jsonb_build_object('kind',p_kind,'snapshot_at',private.business_clock(sid),'business_date',day,'from',first_day,'to',last_day,
     'summary',jsonb_build_object('count',(select count(*) from docs),'units',(select coalesce(sum(quantity),0) from lines),'total_paisa',(select coalesce(sum(total_paisa),0)::text from docs)),
-    'rows',coalesce((select jsonb_agg(to_jsonb(page)) from page),'[]'),'chart',coalesce((select jsonb_agg(to_jsonb(chart)) from chart),'[]'),'users',coalesce((select jsonb_agg(to_jsonb(users) order by total_paisa desc,id) from users),'[]'),'total',(select count(*) from groups),'page',offst/lim+1,'size',lim,'source_count',(select count(*) from lines),'source_rows',case when p_export then coalesce((select jsonb_agg(to_jsonb(export_page)) from export_page),'[]') else '[]'::jsonb end) into result;
+    'rows',coalesce((select jsonb_agg(to_jsonb(page)) from page),'[]'),'chart',coalesce((select jsonb_agg(to_jsonb(chart)) from chart),'[]'),'suppliers',coalesce((select jsonb_agg(to_jsonb(suppliers) order by total_paisa desc,id) from suppliers),'[]'),'total',(select count(*) from groups),'page',offst/lim+1,'size',lim,'source_count',(select count(*) from lines),'source_rows',case when p_export then coalesce((select jsonb_agg(to_jsonb(export_page)) from export_page),'[]') else '[]'::jsonb end) into result;
   else perform private.fail('VALIDATION_ERROR'); end if;
  end if;
  if p_export and (result->>'source_count')::bigint>100000 then perform private.fail('EXPORT_ROW_LIMIT'); end if;
