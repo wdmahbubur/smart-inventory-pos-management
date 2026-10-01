@@ -12,7 +12,8 @@ import type {PredictionRequestContext,ProviderPrediction} from '../../src/lib/ai
 
 const config=readAIConfig({OPENROUTER_API_KEY:'test-only-key'});
 const ctx=():PredictionRequestContext=>({requestId:crypto.randomUUID(),promptVersion:config.promptVersion,signal:new AbortController().signal});
-const wire=(output:unknown=predictionOutput())=>({id:'gen-test-123',model:'apodex/apodex-1.1-mini',choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'submit_inventory_prediction',arguments:JSON.stringify(output)}}]}}]});
+const wire=(output:unknown=predictionOutput())=>({id:'gen-test-123',model:'apodex/apodex-1.1-mini',choices:[{finish_reason:'stop',message:{content:JSON.stringify(output)}}]});
+const toolWire=(output:unknown=predictionOutput())=>({id:'gen-tool-123',model:'apodex/apodex-1.1-mini',choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'submit_inventory_prediction',arguments:JSON.stringify(output)}}]}}]});
 function dependencies(){
  let calls=0,begins=0,saves=0,releases=0;
  const deps:PredictionDependencies={config,provider:{name:'openrouter',model:config.model,async generateInventoryInsights(){calls++;return {output:predictionOutput(),responseId:`test-response-${calls}`,responseModel:config.model};}},begin:async()=>{begins++;return {lease_id:crypto.randomUUID(),context:predictionContext()};},finish:async(_lease,output,response)=>{saves++;const saved=savedPrediction(output);saved.content.provider_response_id=response.responseId;return saved;},release:async()=>{releases++;},current:async()=>predictionContext()};
@@ -100,14 +101,20 @@ test('saved predictions retain provenance and are marked stale on changed data/d
  current.facts_hash='changed';assert.equal(deliverPrediction(savedPrediction(),current).stale,true);
  assert.equal(deliverPrediction(savedPrediction(),current).source,'ai_generated');
 });
-test('OpenRouter makes an uncached external POST requesting full generated output and keeps provider response metadata',async()=>{
+test('OpenRouter uses strict structured output for Apodex and keeps provider response metadata',async()=>{
  let calls=0;
- const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.models,undefined);assert.equal(body.parallel_tool_calls,false);assert.equal(body.tool_choice.function.name,'submit_inventory_prediction');assert.ok(body.tools[0].function.parameters.properties.predictions);return Response.json(wire());};
+ const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.tools,undefined);assert.equal(body.tool_choice,undefined);assert.equal(body.provider.require_parameters,true);assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.strict,true);assert.ok(body.response_format.json_schema.schema.properties.predictions);return Response.json(wire());};
  const provider=new OpenRouterProvider(config.model,'test-key',6000,transport);
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
  assert.equal(calls,1);assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-test-123');assert.equal(response.responseModel,'apodex/apodex-1.1-mini');
 });
-test('OpenRouter rejects truncated, malformed, oversized or multiple-tool output without saving/fallback',async()=>{
+
+test('OpenRouter also accepts the equivalent tool-call shape as a compatibility fallback',async()=>{
+ const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>Response.json(toolWire()));
+ const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
+ assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-tool-123');
+});
+test('OpenRouter rejects truncated, malformed and oversized structured output without saving/fallback',async()=>{
  for(const value of [{...wire(),choices:[{finish_reason:'length'}]},{choices:[{finish_reason:'stop',message:{content:'some text'}}]},null]){
   const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>Response.json(value));
   await assert.rejects(provider.generateInventoryInsights(predictionFacts(),'en',ctx()));
