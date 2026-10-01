@@ -4,6 +4,6 @@
   "installCommand": "npm ci",
   "buildCommand": "npm run build",
   "functions": {
-    "src/app/api/insights/route.ts": {"maxDuration": 60}
+    "src/app/api/insights/route.ts": {"maxDuration": 90}
   }
 }

@@ -17,6 +17,13 @@ test('AI configuration upgrades the legacy prompt version and never fabricates a
  const custom=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-predictions-v3-custom'});assert.equal(custom.promptVersion,'inventory-predictions-v3-custom');
 });
 
+test('AI request timeout defaults to 50 seconds and upgrades the old 30-second production value',()=>{
+ const current=readAIConfig({OPENROUTER_API_KEY:'test-key'});assert.equal(current.timeoutMs,50000);
+ const legacy=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_REQUEST_TIMEOUT_MS:'30000'});assert.equal(legacy.timeoutMs,50000);
+ const explicit=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_REQUEST_TIMEOUT_MS:'55000'});assert.equal(explicit.timeoutMs,55000);
+ assert.throws(()=>readAIConfig({OPENROUTER_API_KEY:'test-key',AI_REQUEST_TIMEOUT_MS:'60001'}));
+});
+
 test('OpenRouter defaults to the requested Apodex free model and preserves explicit overrides',()=>{
  assert.equal(DEFAULT_OPENROUTER_MODEL,'apodex/apodex-1.1-mini:free');
  for(const model of [undefined,'','   ']){
