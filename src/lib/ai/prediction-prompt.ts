@@ -2,7 +2,16 @@ import {z} from 'zod';
 import type {Language} from './contracts';
 import {predictionOutputSchema, type PredictionFacts} from './prediction-contracts';
 
-type JsonSchema=Record<string,any>;
+type JsonSchema={
+ type?:string;
+ properties?:Record<string,JsonSchema>;
+ items?:JsonSchema;
+ enum?:unknown[];
+ anyOf?:JsonSchema[];
+ uniqueItems?:boolean;
+ maxItems?:number;
+ [key:string]:unknown;
+};
 function constrainProviderSchema(schema:JsonSchema,facts:PredictionFacts){
  const ids=facts.products.map(product=>product.id);
  const predictionItems=schema?.properties?.predictions?.items;
