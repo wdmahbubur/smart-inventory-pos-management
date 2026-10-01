@@ -4,8 +4,6 @@ import {unitFacts} from '../fixtures/facts';
 import {buildPolicy,validateOutput,resolveFacts,deliverInsight} from '../../src/lib/ai/grounding';
 import {buildPrompt} from '../../src/lib/ai/prompt';
 import {DEFAULT_OPENROUTER_MODEL,readAIConfig} from '../../src/lib/ai/config';
-import {GeminiProvider} from '../../src/lib/ai/providers/gemini';
-import {OpenRouterProvider} from '../../src/lib/ai/providers/openrouter';
 import {DeterministicTestProvider} from '../../src/lib/ai/providers/test';
 import type {StoredInsight,RequestContext} from '../../src/lib/ai/contracts';
 
@@ -14,9 +12,9 @@ function context():RequestContext{return {requestId:crypto.randomUUID(),promptVe
 
 test('AI configuration upgrades the legacy prompt version and never fabricates a provider',()=>{
  assert.throws(()=>readAIConfig({}),/OPENROUTER_API_KEY is missing/i);
- const current=readAIConfig({OPENROUTER_API_KEY:'test-key'});assert.equal(current.promptVersion,'inventory-suggestions-v2');
- const legacy=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-insights-v1'});assert.equal(legacy.promptVersion,'inventory-suggestions-v2');
- const custom=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-suggestions-v3'});assert.equal(custom.promptVersion,'inventory-suggestions-v3');
+ const current=readAIConfig({OPENROUTER_API_KEY:'test-key'});assert.equal(current.promptVersion,'inventory-predictions-v3');
+ const legacy=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-insights-v1'});assert.equal(legacy.promptVersion,'inventory-predictions-v3');
+ const custom=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-predictions-v3-custom'});assert.equal(custom.promptVersion,'inventory-predictions-v3-custom');
 });
 
 test('OpenRouter defaults to the requested Apodex free model and preserves explicit overrides',()=>{
@@ -68,14 +66,3 @@ test('deterministic adapter implements the suggestion contract and stays test-on
  finally{if(original===undefined)Reflect.deleteProperty(process.env,'NODE_ENV');else Object.assign(process.env,{NODE_ENV:original});}
 });
 
-test('Gemini adapter uses the bounded suggestion schema',async()=>{
- const ctx=context(),valid={summary_key:'growth',section_keys:['demand','restock']};
- const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.generationConfig.responseMimeType,'application/json');assert.equal(body.generationConfig.responseJsonSchema.properties.section_keys.maxItems,4);return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(valid)}]}}]});};
- const provider=new GeminiProvider('gemini-2.5-flash','unit-test-key',1500,transport);const output=await provider.generateInventoryInsights(facts,'bn',ctx);assert.equal(validateOutput(output,ctx.policy).summary_key,'growth');
-});
-
-test('OpenRouter adapter forces one grounded suggestion tool call',async()=>{
- const ctx=context(),valid={summary_key:'growth',section_keys:['demand','discount']};
- const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.model,DEFAULT_OPENROUTER_MODEL);assert.equal(body.models,undefined);assert.deepEqual(body.tool_choice,{type:'function',function:{name:'select_inventory_insight'}});assert.equal(body.tools.length,1);assert.deepEqual(body.tools[0].function.parameters,buildPrompt(facts,'bn',ctx.policy,ctx.promptVersion).schema);return Response.json({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'select_inventory_insight',arguments:JSON.stringify(valid)}}]}}]});};
- const provider=new OpenRouterProvider('apodex/apodex-1.1-mini:free','key',1500,transport);const output=await provider.generateInventoryInsights(facts,'bn',ctx);assert.equal(validateOutput(output,ctx.policy).summary_key,'growth');
-});

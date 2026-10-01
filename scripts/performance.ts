@@ -43,6 +43,7 @@ try{
  await pool.query('analyze public.products; analyze public.inventory_balances; analyze public.purchase_items; analyze public.purchases; analyze public.stock_movements');
  await measure('catalog_page',800,()=>rpc(c.user,'list_catalog',['products',{page:5,size:20}]));
  await measure('workspace_aggregates',800,()=>rpc(c.user,'get_workspace',[]));
+ await measure('ai_prediction_input',800,()=>rpc(c.user,'get_prediction_context',[]));
  await measure('purchase_report_aggregate',800,()=>rpc(c.user,'get_report',['purchases',{from:today(),to:today()},false]));
  await measure('movement_page',800,()=>rpc(c.user,'list_documents',['movements',{page:2,size:20}]));
  const items=products.slice(0,20).map(p=>({product_id:p.id,quantity:1,unit_cost_paisa:'7000'}));

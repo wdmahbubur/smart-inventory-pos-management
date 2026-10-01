@@ -1,20 +1,24 @@
 import {AppError} from '../../errors';
-import {buildPrompt} from '../prompt';
-import type {InventoryInsightProvider,InventoryFacts,Language,RequestContext} from '../contracts';
-export class GeminiProvider implements InventoryInsightProvider{
+import {buildPredictionPrompt} from '../prediction-prompt';
+import {readProviderJson,providerMetadata} from '../provider-response';
+import type {Language} from '../contracts';
+import type {PredictionProvider,PredictionFacts,PredictionRequestContext,ProviderPrediction} from '../prediction-contracts';
+export class GeminiProvider implements PredictionProvider{
  readonly name='gemini';
- constructor(readonly model:string,private readonly apiKey:string,private readonly maxTokens=1500,private readonly transport:typeof fetch=fetch){}
- async generateInventoryInsights(facts:InventoryFacts,language:Language,context:RequestContext):Promise<unknown>{
-  const prompt=buildPrompt(facts,language,context.policy,context.promptVersion);
+ constructor(readonly model:string,private readonly apiKey:string,private readonly maxTokens=6000,private readonly transport:typeof fetch=fetch){}
+ async generateInventoryInsights(facts:PredictionFacts,language:Language,context:PredictionRequestContext):Promise<ProviderPrediction>{
+  const prompt=buildPredictionPrompt(facts,language,context.promptVersion);
   for(let attempt=0;attempt<2;attempt++){
    try{
-    const response=await this.transport(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':this.apiKey},signal:context.signal,body:JSON.stringify({systemInstruction:{parts:[{text:prompt.system}]},contents:[{role:'user',parts:[{text:prompt.user}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:prompt.schema,maxOutputTokens:this.maxTokens,...(this.model.startsWith('gemini-2.5-flash')?{thinkingConfig:{thinkingBudget:0}}:{})}})});
-    if(!response.ok){if(attempt===0&&(response.status===429||response.status>=500)&&!context.signal.aborted){await new Promise(resolve=>setTimeout(resolve,250));continue;}throw new AppError('AI_UNAVAILABLE');}
-    const text=await response.text();if(text.length>32000)throw new AppError('AI_INVALID_OUTPUT');
-    const parsed=JSON.parse(text) as {candidates?:{finishReason?:string;content?:{parts?:{text?:string;thought?:boolean}[]}}[]};
+    const response=await this.transport(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','x-goog-api-key':this.apiKey},signal:context.signal,body:JSON.stringify({systemInstruction:{parts:[{text:prompt.system}]},contents:[{role:'user',parts:[{text:prompt.user}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:prompt.schema,maxOutputTokens:this.maxTokens,...(this.model.startsWith('gemini-2.5-flash')?{thinkingConfig:{thinkingBudget:0}}:{})}})});
+    if(!response.ok){await response.body?.cancel();if(attempt===0&&(response.status===429||response.status>=500)&&!context.signal.aborted){await new Promise(resolve=>setTimeout(resolve,250));continue;}throw new AppError('AI_UNAVAILABLE');}
+    const parsed=await readProviderJson(response) as {responseId?:unknown;modelVersion?:unknown;candidates?:{finishReason?:string;content?:{parts?:{text?:string;thought?:boolean}[]}}[]};
+    if(!parsed||typeof parsed!=='object')throw new AppError('AI_INVALID_OUTPUT');
     const candidate=parsed.candidates?.[0];if(candidate?.finishReason!=='STOP')throw new AppError('AI_INVALID_OUTPUT');
-    const content=candidate.content?.parts?.filter(part=>!part.thought).map(part=>part.text??'').join('');if(!content)throw new AppError('AI_INVALID_OUTPUT');
-    try{return JSON.parse(content);}catch{throw new AppError('AI_INVALID_OUTPUT');}
+    const content=candidate.content?.parts?.filter(part=>!part.thought).map(part=>part.text??'').join('');
+    if(!content||content.length>40_000)throw new AppError('AI_INVALID_OUTPUT');
+    let output:unknown;try{output=JSON.parse(content);}catch{throw new AppError('AI_INVALID_OUTPUT');}
+    return {output,responseId:providerMetadata(parsed.responseId,200),responseModel:providerMetadata(parsed.modelVersion,160)};
    }catch(error){if(context.signal.aborted)throw new AppError('AI_TIMEOUT');if(error instanceof AppError)throw error;if(attempt===0)continue;throw new AppError('AI_UNAVAILABLE');}
   }
   throw new AppError('AI_UNAVAILABLE');

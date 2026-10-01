@@ -1,85 +1,77 @@
-# Read-only, replaceable AI
+# AI-generated predictions and suggestions — v3
 
-## Contract and boundaries
+## What the AI actually does
 
-`InventoryInsightProvider.generateInventoryInsights(facts, language, requestContext)` is the provider-neutral capability. Input is a server-created, owner-scoped fact snapshot; output is untrusted structured text, not SQL, tools or business mutations. `src/lib/ai/service.ts` orchestrates authorization, quota/lease/cache, provider calls, independent grounding validation, persistence, provenance and stale/current delivery.
+The production model now generates its own product-level **next-7-day expected sales**, **low/high ranges**, **business recommendations**, **reorder quantities or test discounts**, and **explanations**. It is no longer limited to selecting `summary_key` and `section_keys`. The older ranking implementation remains only as compatibility code and its old database functions remain available during rollout; it is not used by the new page or Generate path.
 
-The production registry currently supports two explicit adapters:
+`GET /api/insights?language=en` reads observed store data and the latest compatible saved prediction from PostgreSQL. It does not configure or call an external model. `POST /api/insights` always requests a fresh external inference for an authenticated, quota-eligible user. A supplied legacy `regenerate:false` cannot enable cache reuse. There is no cached-result return branch in `begin_prediction` or the generation service. Missing configuration, quota exhaustion, concurrent requests and provider errors are explicit failures, not fake successful AI responses.
 
-- **OpenRouter** — the default production provider for this deployment.
-- **Gemini** — retained as an alternative adapter.
-- The deterministic adapter is test-only and cannot be selected in production.
+## Default provider
 
-POS, purchases, reports and database posting code do not import either provider.
-
-## OpenRouter / Apodex configuration
-
-Default configuration:
-
-```text
+```env
 AI_PROVIDER=openrouter
-OPENROUTER_API_KEY=<server-side secret>
 OPENROUTER_TEXT_MODEL=apodex/apodex-1.1-mini:free
+OPENROUTER_API_KEY=<server-side secret only>
+AI_PROMPT_VERSION=inventory-predictions-v3
+AI_MAX_OUTPUT_TOKENS=6000
 AI_REQUEST_TIMEOUT_MS=30000
 AI_MAX_REQUESTS_PER_HOUR=10
-AI_MAX_OUTPUT_TOKENS=1500
-AI_PROMPT_VERSION=inventory-suggestions-v2
 ```
 
-The API key is server-only. Never prefix it with `NEXT_PUBLIC_`, commit it, expose it in browser code, or store it in Supabase business tables.
+An explicit model environment value overrides the source default. Legacy `inventory-insights-v1` / `inventory-suggestions-v2` prompt versions upgrade to v3; an old 1500-token ranking budget upgrades to 6000 for full output. Other output budgets must be 2000–12000. Prompt variants must retain the `inventory-predictions-v3-...` namespace because the output contract is versioned. No provider key is sent to the browser, committed or persisted in business tables. The app has no automatic fallback to a paid model or another vendor.
 
-OpenRouter's models API was checked on **2 October 2026**. It lists `apodex/apodex-1.1-mini:free` with zero prompt/completion pricing and support for `tools`, `tool_choice`, `response_format` and `structured_outputs`. Catalog availability is not a successful inference test, and the free route's availability/rate limits may change.
+OpenRouter uses an uncached `POST /api/v1/chat/completions` with exactly one requested `submit_inventory_prediction` function output. This is a JSON output interface, not an executable database tool. Gemini remains a replaceable structured-JSON adapter. Both now implement `PredictionProvider` and return the generated output plus provider response ID/model metadata. Response bodies are bounded to 128 KiB and model output to 40,000 characters. Retries are limited to one additional transient/network attempt, within the request timeout.
 
-The existing adapter uses `POST /api/v1/chat/completions`, requests exactly one `select_inventory_insight` function call, and validates the returned priority keys against the approved policy. Changing the model does not change the forecast, stock, profit, grounding or tenant-isolation rules. There is no automatic fallback to a paid model or another provider.
-
-Official references:
-- https://openrouter.ai/api/v1/models
+Official references checked for this implementation:
 - https://openrouter.ai/docs/guides/features/tool-calling
+- https://openrouter.ai/apodex/apodex-1.1-mini:free
+- https://supabase.com/docs/guides/database/functions
 
-**Deployment:** explicitly set `AI_PROVIDER=openrouter` and `OPENROUTER_TEXT_MODEL=apodex/apodex-1.1-mini:free` in the intended Vercel environment, keep the existing server-only `OPENROUTER_API_KEY`, and redeploy directly. An existing environment model value takes precedence over the source default; changing `.env.example` does not edit hosted environment variables. The optional GitHub release workflow is manual-only and is not required for a direct Vercel deployment.
+Model catalog support is not proof of a successful live inference in this application.
 
-The application excludes emails, passwords, customer/supplier phone numbers and full receipts from AI facts, but inventory metrics and bounded product/category names remain business data. Review the selected provider's current data policy before enabling external generation.
+## Observed inputs, not preset answers
 
-## Grounded output, not generated arithmetic
+`get_prediction_context()` returns a tenant-scoped `prediction-facts-v3` snapshot. It includes 56 complete Asia/Dhaka business days of zero-filled daily sales; 7-day, previous-7-day and 30-day counts; partial sales today separately; current stock/minimums; current price/reference cost; observed product lifetime; and latest-sale recency. Future-dated sales are excluded from the product history. Last-sale recency is not the age of the remaining batch and does not imply expiry. Products with no sale are dated from their first receipt where available.
 
-Facts include version/hash, snapshot timestamp, Dhaka date, revision, stock status counts, bounded attention examples and shortages, current reference-cost estimate/category values, and today's posted sales/purchases. Totals cover all records; attention examples have explicit truncation metadata.
+The request is bounded to 24 active products, prioritizing low-stock items and sales history. Total product count and truncation are explicit. Output is bounded to 12 predictions and 8 recommendations. Totals in the UI are labeled as covering the products predicted, not necessarily the whole catalog. The model does not receive the old deterministic `forecast` object, preset card wording or a list of approved suggestion keys.
 
-The database deterministically prepares bounded product-level demand forecasts and business signals from posted sales, captured product costs, current stock, margin, recency and a store-wide weekday factor. The application then prepares approved suggestion/explanation templates bound to those verified values. The provider may only select and prioritize approved strings and fact IDs; persistence stores only validated selection keys. Display resolves numbers from the server fact map, including Bengali digits.
+Live weather, local events, competitor prices, supplier lead times, expiry data and operating expenses are not ingested. The prompt forbids claiming that these are known; conditional assumptions and missing-data limitations must be stated. Names/SKUs are untrusted data, not instructions. Passwords, customer contact data, emails and full receipts are not included.
 
-The provider still cannot invent quantities, weather, market events, demand elasticity, URLs, SQL or stock changes. Forecasts are estimates rather than guarantees, and discount opportunities are controlled tests that retain a margin floor over current reference cost. Unknown IDs/placeholders, numeric claims outside the approved policy, HTML, arbitrary URLs and oversized output are rejected. Product/category names remain untrusted data, never instructions.
+## Output validation and limitations
 
-A successful response records provider, model, language, prompt version, facts hash, store revision, business date, snapshot and generation time. A previous response becomes stale when data changes or the Dhaka business date rolls over.
+The model's numbers and prose are kept, not replaced with templates or silently overwritten by a heuristic. Runtime and database validation check the output shape, allowed product references, unique predictions/actions, integer bounds, nonnegative ordered ranges, evidence keys and action-specific values. High confidence is rejected for very short/sparse recorded histories. Discount suggestions require stocked products, positive reference cost and at least a 10% margin on the **discounted** price; other prices/quantities remain advisory.
 
-## Cache and reliability
+These checks do **not** prove that generated explanations are factually correct, that demand is predictable, or that ranges are calibrated statistical intervals. The UI explicitly labels the output as AI estimates. Review assumptions and recorded inputs before buying stock or discounting. The model cannot edit prices, stock, sales or purchases. Links only open existing review forms; an AI reorder quantity is not automatically posted into a purchase.
 
-Generation requires an explicit UI action. `begin_insight` atomically reuses an exact matching cache entry or acquires one short-lived lease per store/language and consumes the bounded store/hour allowance. The external request happens after the database transaction releases its locks.
+## Persistence and provenance
 
-Failures release the lease and do not create a successful insight row. Source facts and all non-AI business features remain usable when the key is missing, the selected model is unavailable, the free route is rate limited, the provider times out, or the returned output fails grounding.
+Apply `202610020001_ai_generated_predictions.sql` before deploying the new UI. It adds `get_prediction_context`, `latest_prediction`, `begin_prediction`, and `finish_prediction`, plus private validators. Existing business schemas and v1/v2 RPCs remain unchanged.
 
-Application quota defaults to 10 generations per store/hour. That is an application safety limit, not a statement about OpenRouter's current free-model quota.
+A successful result is saved in `ai_insights.content`:
 
-## Gemini alternative
-
-Gemini remains supported by selecting:
-
-```text
-AI_PROVIDER=gemini
-GEMINI_API_KEY=<server-side secret>
-GEMINI_TEXT_MODEL=<supported Gemini model>
+```json
+{
+  "schema_version": "ai-prediction-v3",
+  "output": {
+    "summary": "Model-written overview",
+    "predictions": [],
+    "suggestions": [],
+    "assumptions": [],
+    "limitations": []
+  },
+  "provider_response_id": "Provider response ID, when supplied",
+  "response_model": "Provider-reported model, when supplied"
+}
 ```
 
-The Gemini adapter continues to use Google's structured JSON response schema. No automatic provider fallback occurs: an explicit provider failure is surfaced rather than silently sending the same facts to another vendor.
+This abbreviated example shows the envelope only, not a valid complete output. Real saved output must satisfy all required fields/array bounds.
 
-## Add or switch a provider
+The server/DB preserve provider, requested model, prompt version, generated time, input snapshot and hash. `GET` returns `source:database` (or `none`) and status `ready`, `stale`, `not_generated`, `legacy_result` or `invalid_saved_result`. Successful `POST` returns `source:provider`, `provider_called:true`, `cached:false` and the new saved result. These markers describe the application code path; they are not a cryptographic third-party attestation. Database RPC writes remain owner-scoped, so a privileged administrator or owner with direct RPC access can alter their own insight records.
 
-1. Implement `InventoryInsightProvider` in a server-only adapter.
-2. Register it explicitly in `src/lib/ai/registry.ts` and validate its configuration in `src/lib/ai/config.ts`.
-3. If provider/model provenance is constrained in PostgreSQL, add a version-controlled migration rather than loosening it ad hoc.
-4. Run contract, adversarial grounding, timeout, retry, quota/cache and stale-result tests.
-5. With an approved key, run a real provider smoke test against the dedicated demo store and record the actual provider/model provenance.
+Older ranking records are not presented as full AI predictions. Previous valid v3 output is retained on failure, and the client ignores late GET responses that would overwrite a just-generated result. A changed business day, revision or input hash marks saved predictions stale. Each language has separate saved output and concurrency leases; both languages share the bounded store hourly quota. Up to 20 v3 results per language are retained.
 
-## Required live smoke test
+## Verification and rollout
 
-After `OPENROUTER_API_KEY` is configured in Vercel, log into the dedicated demo store, open Insights, generate once in Bengali and once in English, verify the displayed fact-bound values against reports, and confirm the saved insight records `provider=openrouter` and model `apodex/apodex-1.1-mini:free`.
+Unit tests instrument the provider adapter and generation service: unchanged data still makes two provider calls across two Generate operations; GET makes none; model-written quantities/prose survive; failures do not save; unsafe outputs are rejected. Database tests exercise persistence, no-cache leases, owner isolation, shared quota, raw-day boundaries and legacy detection against a disposable PostgreSQL database. The browser AI-output test explicitly mocks the HTTP response to test rendering/reload/failure behavior; it is not a real provider smoke test.
 
-Repeat without changing data to inspect cache reuse; change a catalog reference cost or receive goods and verify stale labeling. Temporarily removing the key should make generation unavailable while source facts, Purchase and POS remain functional. Mock transport tests do not count as this live-provider smoke test.
+After deployment, run a live English/Bengali generation with the configured provider, confirm the response/model/ID in the UI and saved row, click Generate twice on unchanged data to see two new provider responses, reload to observe a database read, and verify failure keeps the last dated result. Never report a mocked provider response as a successful live inference.

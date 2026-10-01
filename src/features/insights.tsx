@@ -1,95 +1,94 @@
 'use client';
 
 import Link from 'next/link';
-import {useEffect,useState} from 'react';
-import {ArrowRight,BadgePercent,BarChart3,Clock3,PackagePlus,RefreshCw,ShieldCheck,Sparkles,TrendingUp} from 'lucide-react';
+import {useEffect,useRef,useState} from 'react';
+import {ArrowRight,RefreshCw,Sparkles,ShieldCheck} from 'lucide-react';
 import {Heading,Card,Notice,Empty} from '@/components/ui';
 import {money} from '@/lib/money';
 import {displayDate} from '@/lib/dates';
-import {buildSuggestionCards,forecastConfidenceLabel,recentTrendLabel,stockCoverLabel,type SuggestionKind} from '@/lib/ai/action-plan';
-import type {InsightContext,DeliveredInsight,Language,ProductForecastSignal} from '@/lib/ai/contracts';
+import type {Language} from '@/lib/ai/contracts';
+import type {PredictionReadResult} from '@/lib/ai/prediction-contracts';
 
-const suggestionIcons:Record<SuggestionKind,typeof TrendingUp>={demand:TrendingUp,restock:PackagePlus,discount:BadgePercent,stagnant:Clock3};
-function localNumber(value:number,language:Language){const text=String(value);return language==='bn'?text.replace(/[0-9]/g,d=>String.fromCharCode(0x09e6+Number(d))):text;}
-function confidenceClass(value:ProductForecastSignal['confidence']){return value==='high'?'received':value==='medium'?'low_stock':'draft';}
-
-export function Insights({initialContext,initialInsight}:{initialContext:InsightContext;initialInsight:DeliveredInsight|null}){
- const [language,setLanguage]=useState<Language>(initialInsight?.language??'en');
- const [context,setContext]=useState(initialContext);
- const [insight,setInsight]=useState(initialInsight);
- const [busy,setBusy]=useState(false);
- const [error,setError]=useState('');
-
+export function Insights({initialData}:{initialData:PredictionReadResult}){
+ const [language,setLanguage]=useState<Language>(initialData.insight?.language??'en');
+ const [data,setData]=useState(initialData),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const epoch=useRef(0),generating=useRef(false);
  useEffect(()=>{
-  let active=true;
-  const refresh=async()=>{try{const response=await fetch(`/api/insights?language=${language}`,{cache:'no-store'});const data=await response.json();if(active&&response.ok){setContext(data.context);setInsight(data.insight);}}catch{/* Keep the last visibly dated forecast snapshot. */}};
+  let active=true;const controller=new AbortController();
+  const refresh=async()=>{
+   if(generating.current)return;
+   const version=++epoch.current;
+   try{
+    const response=await fetch(`/api/insights?language=${language}`,{cache:'no-store',signal:controller.signal});
+    if(!response.ok)return;
+    const latest:PredictionReadResult=await response.json();
+    // A GET started before Generate must never overwrite the freshly generated result.
+    if(active&&!generating.current&&version===epoch.current)setData(latest);
+   }catch{/* Retain the visibly dated saved result on a read/network failure. */}
+  };
   void refresh();
   const interval=setInterval(()=>{if(document.visibilityState==='visible')void refresh();},60000);
   window.addEventListener('focus',refresh);window.addEventListener('si:data-changed',refresh);
-  return()=>{active=false;clearInterval(interval);window.removeEventListener('focus',refresh);window.removeEventListener('si:data-changed',refresh);};
+  return()=>{active=false;controller.abort();clearInterval(interval);window.removeEventListener('focus',refresh);window.removeEventListener('si:data-changed',refresh);};
  },[language]);
-
- async function generate(regenerate:boolean){
-  setBusy(true);setError('');
+ async function generate(){
+  if(generating.current)return;
+  generating.current=true;++epoch.current;setBusy(true);setError('');
   try{
-   const response=await fetch('/api/insights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language,regenerate}),signal:AbortSignal.timeout(40000)});
-   const data=await response.json();if(!response.ok)throw new Error(data.error?.message??'AI could not complete this request.');setContext(data.context);setInsight(data.insight);
-  }catch(e){setError(e instanceof Error&&e.name!=='TimeoutError'?e.message:'The AI response was interrupted. Forecasts and deterministic suggestions remain available.');}
-  finally{setBusy(false);}
+   const response=await fetch('/api/insights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language,regenerate:true}),signal:AbortSignal.timeout(70000)});
+   const result=await response.json();
+   if(!response.ok)throw new Error(result.error?.message??'AI generation failed. Your previous saved result is unchanged.');
+   if(!result.insight||result.provider_called!==true||result.cached!==false)throw new Error('No new AI result was returned. Your previous saved result is unchanged.');
+   ++epoch.current;setData(result);
+  }catch(e){setError(e instanceof Error&&e.name!=='TimeoutError'?e.message:'The request timed out. Your previous result is still shown; refresh the page to check whether a new result was saved.');}
+  finally{generating.current=false;setBusy(false);}
  }
-
- const facts=context.facts,forecast=facts.forecast,current=insight?.language===language?insight:null,bn=language==='bn';
- const baseCards=buildSuggestionCards(facts,language);
- const priority=current?.content.section_keys??[];
- const order=new Map(priority.map((key,index)=>[key,index]));
- const cards=[...baseCards].sort((a,b)=>(order.get(a.id as typeof priority[number])??99)-(order.get(b.id as typeof priority[number])??99));
- const visibleError=error.includes('could not be grounded')?(bn?'AI এবার suggestionগুলোর priority ঠিক করতে পারেনি। কোনো data save বা change হয়নি।':'AI could not rank the suggestions this time. Nothing was saved or changed.'):error;
-
+ const bn=language==='bn',facts=data.context.facts;
+ const current=data.insight?.language===language?data.insight:null;
+ const result=current?.output;
+ const productMap=new Map((current?.facts_snapshot.products??facts.products).map(p=>[p.id,p]));
+ const count=(n:number)=>n.toLocaleString(bn?'bn-BD':'en-US');
+ const total=result?.predictions.reduce((sum,p)=>sum+p.expected_units_7d,0);
+ const statusLabel=bn?(data.source==='provider'?'নতুন AI result':'Database-এ saved AI result'):(data.source==='provider'?'New AI result':'Saved AI result');
  return <>
-  <Heading eyebrow="Insights / AI" title="AI suggestion center" description="Simple, data-based suggestions for what may sell next, what to restock, what is moving slowly, and where profit opportunities may exist." actions={<div className="insight-actions"><select aria-label="Insight language" disabled={busy} value={language} onChange={e=>{setLanguage(e.target.value as Language);setError('');}}><option value="en">English</option><option value="bn">বাংলা</option></select><button className="button primary" type="button" disabled={busy} onClick={()=>void generate(!!current)}><RefreshCw size={15}/>{busy?'Generating…':current?'Refresh suggestions':'Generate AI suggestions'}</button></div>}/>
+  <Heading eyebrow="Insights / AI" title="AI suggestion center" description="AI-generated sales predictions, stock recommendations and promotion ideas based on your store’s sales history." actions={<div className="insight-actions"><select aria-label="Insight language" disabled={busy} value={language} onChange={e=>{setLanguage(e.target.value as Language);setError('');}}><option value="en">English</option><option value="bn">বাংলা</option></select><button className="button primary" type="button" disabled={busy} onClick={()=>void generate()}><RefreshCw size={15}/>{busy?'Generating…':current?'Generate new AI predictions':'Generate AI predictions'}</button></div>}/>
+
+  <div className="prediction-provenance" role="status" aria-live="polite">
+   <Sparkles size={17}/><div><strong>{busy?(bn?'AI এখন prediction ও suggestion তৈরি করছে…':'AI is creating new predictions and suggestions…'):current?statusLabel:(bn?'এখনও AI prediction তৈরি হয়নি':'No AI prediction generated yet')}</strong>
+   <p>{current?`${current.provider} · ${current.content.response_model??current.model} · ${displayDate(current.generated_at,true)}`:(bn?'Generate চাপলে AI-তে নতুন request যাবে। Page খুললে শুধু saved result load হয়।':'Generate sends a new request to the AI model. Opening this page only loads saved results.')}</p>
+   {current&&<small>{bn?'Data snapshot':'Data snapshot'}: {displayDate(current.facts_snapshot.snapshot_at,true)} · {current.prompt_version}{current.content.provider_response_id?` · Response: ${current.content.provider_response_id}`:''}</small>}</div>
+  </div>
+  {error&&<div role="alert" className="form-message"><Notice tone="error">{error}{current&&(bn?' আগের saved result দেখানো হচ্ছে।':' Showing your previous saved result.')}</Notice></div>}
+  {current?.stale&&<div className="form-message"><Notice tone="warning">{bn?'Saved prediction-এর পর data বা দিন বদলেছে। বর্তমান data দিয়ে নতুন prediction তৈরি করুন।':'Store data or the business date has changed since this prediction. Generate again before relying on it.'}</Notice></div>}
+  {!current&&data.status==='legacy_result'&&<div className="form-message"><Notice>{bn?'আগের saved result শুধু priority নির্ধারণ করত। নতুন AI prediction পেতে Generate চাপুন।':'The older saved result only ranked preset suggestions. Generate to create your first full AI prediction.'}</Notice></div>}
+  {!current&&data.status==='invalid_saved_result'&&<div className="form-message"><Notice tone="warning">The saved result could not be read safely. Generate a new prediction.</Notice></div>}
 
   <section className="suggestion-hero">
-   <div>
-    <span className="insight-kicker"><Sparkles size={14}/>{bn?'PROFIT GROWTH SIGNALS':'PROFIT GROWTH SIGNALS'}</span>
-    <h2>{bn?'আগামী sales বুঝে stock ও pricing সিদ্ধান্ত নিন':'Plan stock and promotions using recent sales patterns'}</h2>
-    <p>{bn?'গত ৫৬ দিনের sales, সাম্প্রতিক পরিবর্তন, সপ্তাহের দিনের pattern, margin এবং current stock দেখে suggestion তৈরি হয়।':'Suggestions use the last 56 days of sales, recent changes, day-of-week patterns, margins and current stock.'}</p>
-    <div className="suggestion-hero-actions"><Link className="button" href="/reports/sales"><BarChart3 size={14}/>{bn?'Sales history':'Sales history'}</Link><small>{bn?'Forecast decision support—guarantee নয়।':'Forecasts are decision support, not guarantees.'}</small></div>
-   </div>
-   <div className="suggestion-forecast-total"><span>{bn?'আগামী ৭ দিনের estimated sales':'ESTIMATED SALES · NEXT 7 DAYS'}</span><strong>{localNumber(forecast.predicted_units_7d,language)}</strong><small>{bn?'প্রায় এত selling unit বিক্রি হতে পারে':'selling units may be sold'}</small><em>{bn?`${forecast.weekday} pattern: স্বাভাবিকের ${localNumber(Math.round(forecast.weekday_factor*100),language)}%`:`${forecast.weekday} pattern: ${localNumber(Math.round(forecast.weekday_factor*100),language)}% of normal`}</em></div>
+   <div><span className="insight-kicker"><Sparkles size={14}/>{bn?'AI-এর অনুমান ও পরামর্শ':'AI FORECAST & RECOMMENDATIONS'}</span><h2>{bn?'পরবর্তী ৭ দিনের জন্য ব্যবসার পরিকল্পনা':'Plan your next 7 days'}</h2>
+   <p lang={language}>{result?.summary??(bn?'AI আপনার daily sales, current stock ও product cost দেখে নিজেই prediction এবং করণীয় তৈরি করবে।':'The AI will analyze daily sales, current stock and product costs, then write its own predictions and recommendations.')}</p>
+   <small>{bn?'AI-এর অনুমান—নিশ্চিত বিক্রি বা লাভ নয়।':'AI estimates, not guaranteed sales or profit.'}</small></div>
+   <div className="suggestion-forecast-total"><span>{bn?'AI-এর estimated sales':'AI ESTIMATED SALES · NEXT 7 DAYS'}</span><strong>{total===undefined||!result?.predictions.length?'—':count(total)}</strong><small>{bn?'বিক্রি হতে পারে':'units may sell'}</small><em>{result?`${count(result.predictions.length)} ${bn?'product-এর prediction; পুরো store total নাও হতে পারে':'products forecast; may not cover the whole store'}`:(bn?'এখনও কোনো prediction নেই':'No prediction yet')}</em></div>
   </section>
-
-  <div className="suggestion-metrics">
-   <div><span>{bn?'গত ৩০ দিনে বিক্রি':'Sold in last 30 days'}</span><strong>{localNumber(forecast.total_units_30d,language)}</strong><small>{bn?'সব completed sales':'all completed sales'}</small></div>
-   <div><span>{bn?'আজকের net profit':'Net profit today'}</span><strong>{money(facts.sales.net_profit_paisa??'0')}</strong><small>{bn?'captured product cost বাদে':'after captured product cost'}</small></div>
-   <div><span>{bn?'Stock বাড়ানো বিবেচনা করুন':'Products to consider restocking'}</span><strong>{localNumber(forecast.restock_candidates.length,language)}</strong><small>{bn?'forecast + safety cover':'forecast + safety cover'}</small></div>
-   <div><span>{bn?'ধীরে বিক্রি হচ্ছে':'Slow-moving products'}</span><strong>{localNumber(forecast.stagnant_products.length,language)}</strong><small>{bn?'৩০+ দিন sale নেই':'30+ days without a sale'}</small></div>
-  </div>
 
   <section className="suggestion-section" aria-labelledby="suggestions-title">
-   <div className="suggestion-section-head"><div><span className="eyebrow">AI suggestions</span><h2 id="suggestions-title">{bn?'এখন কী করা ভালো হতে পারে':'Recommended actions'}</h2></div><p>{bn?'প্রতিটি suggestion verified database signal থেকে আসে। AI stock, price বা purchase নিজে পরিবর্তন করতে পারে না।':'Each suggestion comes from verified database signals. AI cannot change stock, price or purchases.'}</p></div>
-   {cards.length?<div className="suggestion-card-grid">{cards.map(card=>{const Icon=suggestionIcons[card.kind];return <article className={`suggestion-card ${card.tone}`} key={card.id}><div className="suggestion-card-top"><span><Icon size={17}/></span><b>{card.metric}</b></div><h3>{card.title}</h3><p>{card.description}</p><small>{card.detail}</small><Link className="button" href={card.href}>{card.cta}<ArrowRight size={12}/></Link></article>;})}</div>:<Empty title={bn?'এখনও যথেষ্ট sales history নেই':'Not enough sales history yet'} description={bn?'Sales history বাড়লে demand, restock, discount এবং slow-stock suggestion এখানে দেখা যাবে।':'As sales history grows, demand, restock, discount and slow-stock suggestions will appear here.'}/>} 
+   <div className="suggestion-section-head"><div><span className="eyebrow">{bn?'AI-এর পরামর্শ':'WRITTEN BY AI'}</span><h2 id="suggestions-title">{bn?'কী করবেন এবং কেন':'Recommended actions & why'}</h2></div><p>{bn?'AI-এর পরামর্শ শুধু review করার জন্য। Stock বা price নিজে পরিবর্তন হবে না।':'Review these suggestions before acting. Stock and prices are never changed automatically.'}</p></div>
+   {result?<div className="suggestion-card-grid prediction-action-grid">{result.suggestions.map((s,index)=>{const p=s.product_id?productMap.get(s.product_id):undefined;return <article className={`suggestion-card ${s.priority==='high'?'attention':'neutral'}`} key={`${s.product_id}-${s.action}`} lang={language}>
+    <div className="suggestion-card-top"><span><Sparkles size={17}/></span><b>{count(index+1)} · {s.priority} priority</b></div><h3>{s.title}</h3>{p&&<strong className="prediction-product-name">{p.name}</strong>}<p>{s.explanation}</p>
+    {(s.reorder_quantity!==null||s.discount_percent!==null)&&<div className="prediction-recommendation">{s.reorder_quantity!==null?`${bn?'Stock বাড়ানোর পরামর্শ':'Suggested order'}: ${count(s.reorder_quantity)} ${p?.unit??''}`:`${bn?'পরীক্ষামূলক discount':'Test discount'}: ${count(s.discount_percent!)}%`}</div>}
+    <p className="prediction-impact"><strong>{bn?'সম্ভাব্য উপকার':'Potential benefit'}: </strong>{s.expected_impact}</p>
+    <small>{bn?'ভিত্তি':'Based on'}: {s.evidence.map(key=>key.replaceAll('_',' ')).join(' · ')}</small>
+    {p&&<Link className="button" href={s.action==='restock'?`/purchases/new?products=${encodeURIComponent(p.id)}`:`/products/${encodeURIComponent(p.id)}/edit`}>{s.action==='restock'?(bn?'Purchase draft review করুন':'Review purchase draft'):(bn?'Product review করুন':'Review product')}<ArrowRight size={12}/></Link>}
+   </article>;})}</div>:<Empty title={bn?'AI-কে prediction ও suggestion তৈরি করতে দিন':'Generate your first AI forecast'} description={bn?'এই অংশে AI-এর নিজের prediction, stock বা promotion suggestion এবং প্রতিটির ব্যাখ্যা আসবে।':'Your model’s predictions, stock or promotion suggestions and explanations will appear here after a successful generation.'}/>}
   </section>
 
-  <div className="suggestion-columns">
-   <Card title={bn?'Demand forecast by product':'Demand forecast by product'} description={bn?'Top-selling products, recent trend এবং আগামী ৭ দিনের projected demand।':'Top-selling products, recent trend and projected demand for the next 7 days.'} body>
-    {forecast.top_sellers.length?<div className="forecast-list">{forecast.top_sellers.slice(0,8).map((item,index)=><div className="forecast-row" key={item.id}><span className="forecast-rank">{index+1}</span><div className="forecast-product"><strong>{item.name}</strong><small>{item.sku} · {localNumber(item.units_30d,language)} {bn?'গত ৩০ দিনে বিক্রি':'sold in last 30 days'}</small></div><div className="forecast-trend"><strong className={item.trend_pct>=0?'green':'red'}>{recentTrendLabel(item,language)}</strong><small>{bn?'সাম্প্রতিক sales change':'recent sales change'}</small></div><div className="forecast-number"><strong>{bn?'প্রায় ': 'About '}{localNumber(item.forecast_7d_units,language)}</strong><small>{bn?'আগামী ৭ দিনে বিক্রি হতে পারে':'expected next 7 days'}</small></div><div className="forecast-number"><strong>{item.stock_cover_days===null?'—':stockCoverLabel(item.stock_cover_days,language)}</strong><small>{bn?'বর্তমান stock অনুযায়ী':'based on current stock'}</small></div><span className={`badge ${confidenceClass(item.confidence)}`}>{forecastConfidenceLabel(item.confidence,language)}</span></div>)}</div>:<Empty title="No demand signal yet" description="Complete more sales to build a product-level forecast."/>}
-   </Card>
-
-   <Card title={bn?'Profit opportunities':'Profit opportunities'} description={bn?'Recent product profit ও margin দেখে availability priority।':'Prioritize availability using recent product profit and margin.'} body>
-    {forecast.profit_leaders.length?<div className="profit-list">{forecast.profit_leaders.slice(0,6).map(item=><div className="profit-row" key={item.id}><div><strong>{item.name}</strong><small>{localNumber(item.units_30d,language)} sold · margin {localNumber(item.margin_pct,language)}%</small></div><div><strong>{money(item.profit_30d_paisa)}</strong><small>{bn?'est. 30d product profit':'est. 30d product profit'}</small></div></div>)}</div>:<p className="muted">{bn?'এখনও product profit history নেই।':'No product profit history is available yet.'}</p>}
-   </Card>
-  </div>
-
-  {visibleError&&<div className="form-message" style={{marginBottom:20}}><Notice tone="error">{visibleError}</Notice></div>}
-  <Card title={bn?'Prediction কীভাবে তৈরি হয়':'How the prediction works'} description={`Snapshot: ${displayDate(facts.snapshot_at,true)} · Asia/Dhaka`} className="prediction-method-card" body>
-   <ul className="suggestion-method">
-    <li><strong>7/30-day sales velocity</strong><span>Recent demand and a longer baseline are weighted together.</span></li>
-    <li><strong>Recent trend</strong><span>The last 7 days are compared with the previous 7 days, with caps to reduce spikes.</span></li>
-    <li><strong>Weekday environment</strong><span>A bounded 56-day store-wide weekday pattern adjusts the short forecast.</span></li>
-    <li><strong>Margin & stock cover</strong><span>Current reference cost, selling price and quantity drive restock and discount headroom.</span></li>
-    <li><strong>Slow-stock signal</strong><span>30+ days without a completed sale while stock remains triggers review.</span></li>
-   </ul>
-   <Notice tone="neutral"><ShieldCheck size={14}/>{bn?'Weather, local event, competitor price বা external market data এখন app-এ নেই—AI এগুলো জানে বলে ধরে নেয় না।':'Weather, local events, competitor pricing and external market data are not currently ingested, so AI does not pretend to know them.'}</Notice>
+  <Card title={bn?'Product অনুযায়ী AI prediction':'AI sales predictions by product'} description={bn?'Estimate ও range AI তৈরি করেছে; এগুলো নিশ্চিত ফলাফল নয়।':'Estimates and low–high ranges are generated by the model, not a database forecast formula. Ranges are not calibrated statistical intervals.'} body>
+   {result?.predictions.length?<div className="ai-prediction-list">{result.predictions.map(p=>{const product=productMap.get(p.product_id)!;return <article className="ai-prediction-row" key={p.product_id} lang={language}><div><h3>{product.name}</h3><small>{product.sku} · {bn?'AI confidence':'AI confidence'}: {p.confidence}</small></div><div className="ai-prediction-quantity"><strong>{count(p.expected_units_7d)} {product.unit}</strong><small>{bn?'আগামী ৭ দিনে আনুমানিক':'estimated next 7 days'} · {bn?'সীমা':'range'} {count(p.low_units_7d)}–{count(p.high_units_7d)}</small></div><p>{p.explanation}</p><small className="ai-prediction-observed">{bn?'Recorded data':'Recorded data'}: {product.units_7d} sold / previous 7 complete days · {product.quantity} currently in stock at the snapshot</small></article>;})}</div>:<p className="muted">{result?'The AI did not provide a product forecast for this snapshot. See its limitations below.':'No AI-generated quantities are available yet.'}</p>}
   </Card>
+  {result&&<div className="suggestion-columns prediction-notes"><Card title={bn?'AI-এর অনুমান':'Assumptions made by AI'} body>{result.assumptions.map((text,i)=><p lang={language} key={i}>{text}</p>)}</Card><Card title={bn?'যেখানে সতর্ক থাকতে হবে':'Limitations & uncertainty'} body>{result.limitations.map((text,i)=><p lang={language} key={i}>{text}</p>)}</Card></div>}
+
+  <details className="prediction-facts"><summary>{bn?'AI-কে যে recorded data দেওয়া হয়':'View the recorded data available to AI'}</summary><p>Snapshot: {displayDate(facts.snapshot_at,true)} · Asia/Dhaka. Complete-day history: {facts.history_from} to {facts.history_to}. Today’s sales are partial.</p><p>{facts.products.length} of {facts.total_products} products included{facts.products_truncated?' (bounded analysis sample)':''}. These are observations, not AI predictions.</p>
+   <div className="prediction-facts-grid">{facts.products.map(p=><div key={p.id}><strong>{p.name}</strong><small>{p.units_7d} sold / last 7 complete days · {p.units_30d} / last 30 days</small><small>{p.quantity} in stock · price {money(p.selling_price_paisa)} · reference cost {money(p.reference_cost_paisa)}</small></div>)}</div>
+  </details>
+  <Notice tone="neutral"><ShieldCheck size={14}/>{bn?'AI-তে sales summary ও product data পাঠানো হয়; password, email বা customer details নয়। Weather, local event ও competitor price দেওয়া নেই। AI এগুলো সম্পর্কে অনুমান করলে সেটি যাচাই করুন।':'Generation sends product data and sales summaries to the configured AI provider, not passwords, emails or customer details. Live weather, local events and competitor prices are not supplied. Review model assumptions before acting.'}</Notice>
  </>;
 }

@@ -48,8 +48,8 @@ test('draft isolation, responsive POS, lost checkout response and same-receipt r
  await page.setViewportSize({width:1440,height:1024});await page.emulateMedia({media:'print'});await capture(page,'receipt-a4',1440);await expect(page.locator('.sidebar')).toBeHidden();await page.emulateMedia({media:'screen'});
 });
 
-test('missing AI keeps deterministic forecasts, suggestions and keyboard dialog focus',async({page})=>{
- await login(page);await page.goto('/insights');await expect(page.getByLabel('Insight language')).toHaveValue('en');await expect(page.getByRole('heading',{name:'Recommended actions',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'Demand forecast by product',exact:true})).toBeVisible();await page.getByRole('button',{name:'Generate AI suggestions',exact:true}).click();await expect(page.getByText('OPENROUTER_API_KEY is missing',{exact:false})).toBeVisible();await expect(page.getByRole('heading',{name:'Demand forecast by product',exact:true})).toBeVisible();
+test('missing AI reports an error without inventing a forecast and preserves keyboard dialog focus',async({page})=>{
+ await login(page);await page.goto('/insights');await expect(page.getByLabel('Insight language')).toHaveValue('en');await expect(page.getByRole('heading',{name:'Recommended actions & why',exact:true})).toBeVisible();await expect(page.getByRole('heading',{name:'AI sales predictions by product',exact:true})).toBeVisible();await page.getByRole('button',{name:'Generate AI predictions',exact:true}).click();await expect(page.getByText('OPENROUTER_API_KEY is missing',{exact:false})).toBeVisible();await expect(page.getByRole('heading',{name:'AI sales predictions by product',exact:true})).toBeVisible();
  await page.goto('/categories');const trigger=page.getByRole('button',{name:'Add category',exact:true});await trigger.focus();await page.keyboard.press('Enter');await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByLabel('Category name',{exact:true})).toBeFocused();await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).not.toBeVisible();await expect(trigger).toBeFocused();
 });
 

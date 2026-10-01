@@ -19,6 +19,10 @@ export type Database={public:{
   delete_purchase_draft:Fn<{p_id:string;p_expected_version:number;p_request_id:string}>;
   complete_sale:Fn<{p_payload:Json;p_request_id:string}>;
   get_operation_result:Fn<{p_operation:string;p_request_id:string}>;
+  get_prediction_context:Fn<Record<string,never>>;
+  latest_prediction:Fn<{p_language:string}>;
+  begin_prediction:Fn<{p_language:string;p_provider:string;p_model:string;p_prompt_version:string;p_limit:number}>;
+  finish_prediction:Fn<{p_lease_id:string;p_output:Json;p_response_id:string|null;p_response_model:string|null}>;
   get_insight_context:Fn<Record<string,never>>;
   begin_insight:Fn<{p_language:string;p_provider:string;p_model:string;p_prompt_version:string;p_force:boolean;p_limit:number}>;
   finish_insight:Fn<{p_lease_id:string;p_content:Json}>;
