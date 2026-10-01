@@ -26,6 +26,8 @@ test('v3 prompt asks for model-authored numeric forecasts and prose, sends obser
  const data=JSON.parse(prompt.user);assert.ok(data.observed_store_data.products[0].daily_units.length===56);
  assert.equal(data.available_sections,undefined);assert.equal(data.observed_store_data.forecast,undefined);
  const schema=JSON.stringify(prompt.schema);assert.ok(schema.includes('expected_units_7d'));assert.ok(schema.includes('explanation'));assert.ok(!schema.includes('summary_key'));
+ assert.deepEqual((prompt.schema as any).properties.predictions.items.properties.product_id.enum,[predictionProductId]);
+ assert.equal((prompt.schema as any).properties.predictions.items.properties.evidence.uniqueItems,true);
 });
 test('model-authored forecast and explanation survive validation unchanged and may exceed available stock',()=>{
  const raw=predictionOutput();assert.ok(raw.predictions[0].expected_units_7d>predictionFacts().products[0].quantity);
@@ -42,9 +44,9 @@ test('rejects canned rank-only output, fabricated/cross-store product IDs, dupli
   assert.throws(()=>validatePrediction(value,predictionFacts()));
  }
 });
-test('sparse histories cannot be represented as high confidence; forecast confidence is not an accuracy guarantee',()=>{
+test('unsupported high confidence is conservatively downgraded instead of discarding an otherwise valid forecast',()=>{
  const facts=predictionFacts(),value=predictionOutput();facts.products[0].observed_days=2;value.predictions[0].confidence='high';
- assert.throws(()=>validatePrediction(value,facts));value.predictions[0].confidence='low';assert.ok(validatePrediction(value,facts));
+ const valid=validatePrediction(value,facts);assert.equal(valid.predictions[0].confidence,'low');
 });
 test('discount safety uses price after discount, supports independent model choice and rejects loss-making discounts',()=>{
  const output=predictionOutput(),s=output.suggestions[0];s.action='discount_test';s.reorder_quantity=null;s.discount_percent=10;
@@ -52,10 +54,10 @@ test('discount safety uses price after discount, supports independent model choi
  s.discount_percent=30;assert.throws(()=>validatePrediction(output,predictionFacts()));
  s.discount_percent=10;const facts=predictionFacts();facts.products[0].quantity=0;assert.throws(()=>validatePrediction(output,facts));
 });
-test('restock requires a positive quantity and a referenced model forecast; unrelated action quantities are rejected',()=>{
+test('restock still requires a positive quantity and forecast; harmless irrelevant quantities are stripped',()=>{
  const output=predictionOutput();output.suggestions[0].reorder_quantity=0;assert.throws(()=>validatePrediction(output,predictionFacts()));
  output.suggestions[0].reorder_quantity=40;output.predictions=[];assert.throws(()=>validatePrediction(output,predictionFacts()));
- output.suggestions[0].action='promote';assert.throws(()=>validatePrediction(output,predictionFacts()));
+ const promote=predictionOutput();promote.suggestions[0].action='promote';const valid=validatePrediction(promote,predictionFacts());assert.equal(valid.suggestions[0].reorder_quantity,null);
 });
 test('plain prose is allowed but HTML, URLs, missing evidence and duplicate action entries are rejected',()=>{
  for(const bad of ['<script>attack</script>','https://example.test/steal']){const output=predictionOutput();output.summary=bad;assert.throws(()=>validatePrediction(output,predictionFacts()));}
