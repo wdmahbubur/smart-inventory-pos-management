@@ -17,7 +17,7 @@ Go to **Settings → Secrets and variables → Actions → New repository secret
 
 Do not send tokens in chat or commit them. Use the shortest practical expiration and revoke them after setup when unattended deployment is not needed. The Supabase management token is never copied into the application or Vercel environment. No administrator database key is required by the application.
 
-Open **Actions → Deploy Smart Inventory to Vercel → Run workflow → master**. Adding a secret alone does not start a run. The workflow also runs when its scripts/target change, but never on untrusted PRs or other branches.
+Open **Actions → Deploy Smart Inventory to Vercel → Run workflow → master**. Adding a secret alone does not start a run. The workflow is now manual-only: changing scripts or source does not trigger a GitHub production deployment. Use direct Vercel deployment for the current requested workflow.
 
 For an existing verified custom domain, set the optional Actions **variable** `APP_URL` to its HTTPS origin. Otherwise the script discovers a verified production `.vercel.app` domain from the actual project. It never invents or purchases a domain and stops if a verified production domain cannot be resolved.
 
@@ -35,7 +35,7 @@ Live read-only checks do not prove authenticated Purchase/POS workflows, email d
 
 Configure a real SMTP sender in Supabase for general public registration. The built-in sender is restricted and not a production email service. The script preserves SMTP settings and only records whether a custom host exists; it never disables email confirmation to make a test pass.
 
-AI remains optional. For the requested production provider, add `OPENROUTER_API_KEY` as a server-side secret. `OPENROUTER_TEXT_MODEL` may be set to `nvidia/nemotron-3-ultra-550b-a55b:free`; the application also defaults to that reviewed slug. Gemini remains an explicitly supported alternative. Purchase/POS do not require either AI provider.
+AI remains optional. For the requested production provider, add `OPENROUTER_API_KEY` as a server-side secret. `OPENROUTER_TEXT_MODEL` may be set to `apodex/apodex-1.1-mini:free`; the application also defaults to that reviewed slug. Gemini remains an explicitly supported alternative. Purchase/POS do not require either AI provider.
 
 ## Commands and test limits
 

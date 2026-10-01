@@ -12,14 +12,14 @@ The production registry currently supports two explicit adapters:
 
 POS, purchases, reports and database posting code do not import either provider.
 
-## OpenRouter / Nemotron configuration
+## OpenRouter / Apodex configuration
 
 Default configuration:
 
 ```text
 AI_PROVIDER=openrouter
 OPENROUTER_API_KEY=<server-side secret>
-OPENROUTER_TEXT_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+OPENROUTER_TEXT_MODEL=apodex/apodex-1.1-mini:free
 AI_REQUEST_TIMEOUT_MS=30000
 AI_MAX_REQUESTS_PER_HOUR=10
 AI_MAX_OUTPUT_TOKENS=1500
@@ -28,13 +28,17 @@ AI_PROMPT_VERSION=inventory-suggestions-v2
 
 The API key is server-only. Never prefix it with `NEXT_PUBLIC_`, commit it, expose it in browser code, or store it in Supabase business tables.
 
-OpenRouter's model page for `nvidia/nemotron-3-ultra-550b-a55b:free` was checked on **20 September 2026**. It lists the model as a free, rate-limited text model and reports tool-calling support, while `response_format` is not supported. The adapter therefore uses OpenRouter's OpenAI-compatible `POST /api/v1/chat/completions` endpoint and forces exactly one function/tool call whose JSON Schema is generated from the application's approved wording. It does **not** rely on free-form JSON mode. The returned function arguments are parsed and then passed through the same independent grounding validator used by every provider.
+OpenRouter's models API was checked on **2 October 2026**. It lists `apodex/apodex-1.1-mini:free` with zero prompt/completion pricing and support for `tools`, `tool_choice`, `response_format` and `structured_outputs`. Catalog availability is not a successful inference test, and the free route's availability/rate limits may change.
+
+The existing adapter uses `POST /api/v1/chat/completions`, requests exactly one `select_inventory_insight` function call, and validates the returned priority keys against the approved policy. Changing the model does not change the forecast, stock, profit, grounding or tenant-isolation rules. There is no automatic fallback to a paid model or another provider.
 
 Official references:
-- https://openrouter.ai/nvidia/nemotron-3-ultra-550b-a55b:free
-- https://openrouter.ai/developers
+- https://openrouter.ai/api/v1/models
+- https://openrouter.ai/docs/guides/features/tool-calling
 
-The free endpoint is rate limited and its model page warns against sending confidential or personal data. This application already excludes emails, passwords, customer/supplier phone numbers and full receipts from AI facts, but inventory metrics and bounded product/category names are still business data. The store owner should enable this provider only if that disclosure is acceptable under the provider's current terms.
+**Deployment:** explicitly set `AI_PROVIDER=openrouter` and `OPENROUTER_TEXT_MODEL=apodex/apodex-1.1-mini:free` in the intended Vercel environment, keep the existing server-only `OPENROUTER_API_KEY`, and redeploy directly. An existing environment model value takes precedence over the source default; changing `.env.example` does not edit hosted environment variables. The optional GitHub release workflow is manual-only and is not required for a direct Vercel deployment.
+
+The application excludes emails, passwords, customer/supplier phone numbers and full receipts from AI facts, but inventory metrics and bounded product/category names remain business data. Review the selected provider's current data policy before enabling external generation.
 
 ## Grounded output, not generated arithmetic
 
@@ -76,6 +80,6 @@ The Gemini adapter continues to use Google's structured JSON response schema. No
 
 ## Required live smoke test
 
-After `OPENROUTER_API_KEY` is configured in Vercel, log into the dedicated demo store, open Insights, generate once in Bengali and once in English, verify the displayed fact-bound values against reports, and confirm the saved insight records `provider=openrouter` and model `nvidia/nemotron-3-ultra-550b-a55b:free`.
+After `OPENROUTER_API_KEY` is configured in Vercel, log into the dedicated demo store, open Insights, generate once in Bengali and once in English, verify the displayed fact-bound values against reports, and confirm the saved insight records `provider=openrouter` and model `apodex/apodex-1.1-mini:free`.
 
 Repeat without changing data to inspect cache reuse; change a catalog reference cost or receive goods and verify stale labeling. Temporarily removing the key should make generation unavailable while source facts, Purchase and POS remain functional. Mock transport tests do not count as this live-provider smoke test.

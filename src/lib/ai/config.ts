@@ -1,8 +1,8 @@
 import {AppError} from '../errors';
 
 export type AIProviderName='gemini'|'openrouter';
-// Reviewed OpenRouter free-route model; the API key remains a server-only runtime secret.
-export const DEFAULT_OPENROUTER_MODEL='nvidia/nemotron-3-ultra-550b-a55b:free';
+// User-selected OpenRouter model. Keep the API key server-only; explicit model overrides remain supported.
+export const DEFAULT_OPENROUTER_MODEL='apodex/apodex-1.1-mini:free';
 
 export interface AIConfig {
  provider:AIProviderName;

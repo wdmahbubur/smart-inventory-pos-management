@@ -53,9 +53,9 @@ test('AI quota is bounded across new server calls and cannot be raised through t
  await assert.rejects(rpc(c.user,'begin_insight',['en','gemini','contract-test','inventory-suggestions-v2',true,100]),/VALIDATION_ERROR/);
 });
 
-test('OpenRouter Nemotron slug is accepted by the durable AI quota boundary',async()=>{
+test('OpenRouter Apodex free slug is accepted by the durable AI quota boundary',async()=>{
  const c=await base();await product(c);
- const begun=await rpc<Begin>(c.user,'begin_insight',['en','openrouter','nvidia/nemotron-3-ultra-550b-a55b:free','inventory-suggestions-v2',true,10]);
+ const begun=await rpc<Begin>(c.user,'begin_insight',['en','openrouter','apodex/apodex-1.1-mini:free','inventory-suggestions-v2',true,10]);
  assert.equal(begun.cached,false);assert.ok(begun.lease_id);await rpc(c.user,'release_insight_lease',[begun.lease_id]);
- await assert.rejects(rpc(c.user,'begin_insight',['en','unknown-provider','nvidia/nemotron-3-ultra-550b-a55b:free','inventory-suggestions-v2',true,10]),/VALIDATION_ERROR/);
+ await assert.rejects(rpc(c.user,'begin_insight',['en','unknown-provider','apodex/apodex-1.1-mini:free','inventory-suggestions-v2',true,10]),/VALIDATION_ERROR/);
 });

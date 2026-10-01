@@ -63,7 +63,17 @@ Feature pushes include dialog accessibility (`255f6d7`), scoped ledger validatio
 
 1. **Vercel authorization and publication:** add the two required Actions secrets and run the prepared workflow on master. No working live URL is claimed. The selected hosted database schema is ready.
 2. **Hosted Supabase integration:** the backup/archive/schema installation is complete and public Auth/anonymous-denial HTTP checks pass. Configure the production site/callback URLs through the release script and configure SMTP, then verify real hosted Auth and authenticated browser workflows. Unrelated TakaTrack data was not modified.
-3. **AI provider:** configure `OPENROUTER_API_KEY` server-side and run the documented Bengali/English smoke test using `nvidia/nemotron-3-ultra-550b-a55b:free`. Core operations and source facts work without AI; successful external generation is not yet verified.
+3. **AI provider:** configure `OPENROUTER_API_KEY` server-side and run the documented Bengali/English smoke test using `apodex/apodex-1.1-mini:free`. Core operations and source facts work without AI; successful external generation is not yet verified.
 4. **Visual/acceptance:** remaining panel/form composition and populated-state differences are recorded in VISUAL_QA.md. Exact pixel parity, Safari/Firefox, physical printers, every keyboard combination, hosted cache/secret auditing and deployed multi-instance latency remain unverified. Both unit and actual database coverage verify the 100,001-row export rejection.
 
 Do not mark the whole release complete from a green build alone. Never expose demo seeding, clock override, direct stock editing, service keys or a deterministic AI fallback in production.
+
+
+## OpenRouter model configuration — 2 October 2026
+
+- Requested default: `apodex/apodex-1.1-mini:free`; runtime defaults, environment example, release defaults, model-contract tests and provider documentation are aligned.
+- The OpenRouter catalog lists the exact slug with tool-calling support. This is metadata verification, not a completed live inference test.
+- Explicit `OPENROUTER_TEXT_MODEL` overrides remain supported. Existing hosted overrides must be updated before a direct Vercel redeploy; no hosted environment update or deployment is claimed by this source change.
+- The optional GitHub production-release workflow is manual-only to preserve the user's direct-deployment preference. Verification workflows remain enabled.
+- No business data, SQL migration, stock/profit calculation, AI grounding policy or API credential is changed.
+- Local verification for this change: TypeScript and lint passed; 27/27 unit tests and 15/15 mocked deployment-guard tests passed. No live inference or deployment test was performed.

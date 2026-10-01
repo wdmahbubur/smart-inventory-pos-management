@@ -1,14 +1,7 @@
 name: Deploy Smart Inventory to Vercel
+# Releases are manual-only; source updates must not deploy via GitHub automatically.
 on:
   workflow_dispatch:
-  push:
-    branches: [master]
-    paths:
-      - '.github/workflows/deploy-production.yml'
-      - 'scripts/deploy-production.mjs'
-      - 'scripts/check-hosted-public.mjs'
-      - 'tests/deployment/**'
-      - 'config/deployment-target.json'
 permissions:
   contents: read
 concurrency:

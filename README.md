@@ -55,7 +55,7 @@ As an alternative for an **empty hosted Supabase database**, `DATABASE_URL=... A
 | `APP_URL` | Server | Exact approved origin, including local port. |
 | `AI_PROVIDER` | Server | `openrouter` by default; `gemini` remains supported. |
 | `OPENROUTER_API_KEY` | Server secret | Optional; required only for OpenRouter generation. Never expose to the browser. |
-| `OPENROUTER_TEXT_MODEL` | Server | Defaults to `nvidia/nemotron-3-ultra-550b-a55b:free`. |
+| `OPENROUTER_TEXT_MODEL` | Server | Defaults to `apodex/apodex-1.1-mini:free`. |
 | `GEMINI_API_KEY` | Server secret | Optional alternative-provider key. |
 | `GEMINI_TEXT_MODEL` | Server | Required only when `AI_PROVIDER=gemini`. |
 | `AI_REQUEST_TIMEOUT_MS` | Server | 30000 by default. |

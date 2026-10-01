@@ -9,7 +9,7 @@ export class ReleaseError extends Error {
   constructor(code) { super(code); this.name = 'ReleaseError'; }
 }
 const reject = code => { throw new ReleaseError(code); };
-const DEFAULT_OPENROUTER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
+const DEFAULT_OPENROUTER_MODEL = 'apodex/apodex-1.1-mini:free';
 
 export function validateTarget(target, env) {
   if (target.repository !== 'wdmahbubur/smart-inventory-pos-management' ||

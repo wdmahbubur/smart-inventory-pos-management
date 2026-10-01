@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {unitFacts} from '../fixtures/facts';
 import {buildPolicy,validateOutput,resolveFacts,deliverInsight} from '../../src/lib/ai/grounding';
 import {buildPrompt} from '../../src/lib/ai/prompt';
-import {readAIConfig} from '../../src/lib/ai/config';
+import {DEFAULT_OPENROUTER_MODEL,readAIConfig} from '../../src/lib/ai/config';
 import {GeminiProvider} from '../../src/lib/ai/providers/gemini';
 import {OpenRouterProvider} from '../../src/lib/ai/providers/openrouter';
 import {DeterministicTestProvider} from '../../src/lib/ai/providers/test';
@@ -17,6 +17,24 @@ test('AI configuration upgrades the legacy prompt version and never fabricates a
  const current=readAIConfig({OPENROUTER_API_KEY:'test-key'});assert.equal(current.promptVersion,'inventory-suggestions-v2');
  const legacy=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-insights-v1'});assert.equal(legacy.promptVersion,'inventory-suggestions-v2');
  const custom=readAIConfig({OPENROUTER_API_KEY:'test-key',AI_PROMPT_VERSION:'inventory-suggestions-v3'});assert.equal(custom.promptVersion,'inventory-suggestions-v3');
+});
+
+test('OpenRouter defaults to the requested Apodex free model and preserves explicit overrides',()=>{
+ assert.equal(DEFAULT_OPENROUTER_MODEL,'apodex/apodex-1.1-mini:free');
+ for(const model of [undefined,'','   ']){
+  const config=readAIConfig({OPENROUTER_API_KEY:'test-key',OPENROUTER_TEXT_MODEL:model});
+  assert.equal(config.provider,'openrouter');assert.equal(config.model,DEFAULT_OPENROUTER_MODEL);
+ }
+ const selected=readAIConfig({AI_PROVIDER:'openrouter',OPENROUTER_API_KEY:'test-key',OPENROUTER_TEXT_MODEL:' "apodex/apodex-1.1-mini:free" '});
+ assert.equal(selected.model,DEFAULT_OPENROUTER_MODEL);
+ const custom=readAIConfig({OPENROUTER_API_KEY:'test-key',OPENROUTER_TEXT_MODEL:'vendor/explicit-model:free'});
+ assert.equal(custom.model,'vendor/explicit-model:free');
+ assert.throws(()=>readAIConfig({OPENROUTER_API_KEY:'test-key',OPENROUTER_TEXT_MODEL:'bad model'}));
+});
+
+test('an explicitly configured Gemini adapter is unchanged by the OpenRouter model switch',()=>{
+ const config=readAIConfig({AI_PROVIDER:'gemini',GEMINI_API_KEY:'test-gemini-key',GEMINI_TEXT_MODEL:'chosen-gemini-model',OPENROUTER_API_KEY:'test-openrouter-key'});
+ assert.equal(config.provider,'gemini');assert.equal(config.model,'chosen-gemini-model');
 });
 
 test('grounding accepts only approved forecast suggestions and rejects invented claims',()=>{
@@ -58,6 +76,6 @@ test('Gemini adapter uses the bounded suggestion schema',async()=>{
 
 test('OpenRouter adapter forces one grounded suggestion tool call',async()=>{
  const ctx=context(),valid={summary_key:'growth',section_keys:['demand','discount']};
- const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.tools.length,1);assert.deepEqual(body.tools[0].function.parameters,buildPrompt(facts,'bn',ctx.policy,ctx.promptVersion).schema);return Response.json({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'select_inventory_insight',arguments:JSON.stringify(valid)}}]}}]});};
- const provider=new OpenRouterProvider('nvidia/nemotron-3-ultra-550b-a55b:free','key',1500,transport);const output=await provider.generateInventoryInsights(facts,'bn',ctx);assert.equal(validateOutput(output,ctx.policy).summary_key,'growth');
+ const transport:typeof fetch=async(_url,options)=>{const body=JSON.parse(String(options?.body));assert.equal(body.model,DEFAULT_OPENROUTER_MODEL);assert.equal(body.models,undefined);assert.deepEqual(body.tool_choice,{type:'function',function:{name:'select_inventory_insight'}});assert.equal(body.tools.length,1);assert.deepEqual(body.tools[0].function.parameters,buildPrompt(facts,'bn',ctx.policy,ctx.promptVersion).schema);return Response.json({choices:[{finish_reason:'tool_calls',message:{tool_calls:[{type:'function',function:{name:'select_inventory_insight',arguments:JSON.stringify(valid)}}]}}]});};
+ const provider=new OpenRouterProvider('apodex/apodex-1.1-mini:free','key',1500,transport);const output=await provider.generateInventoryInsights(facts,'bn',ctx);assert.equal(validateOutput(output,ctx.policy).summary_key,'growth');
 });
