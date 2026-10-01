@@ -14,11 +14,13 @@ type JsonSchema={
 };
 function constrainProviderSchema(schema:JsonSchema,facts:PredictionFacts){
  const ids=facts.products.map(product=>product.id);
- const predictionItems=schema?.properties?.predictions?.items;
- const suggestionItems=schema?.properties?.suggestions?.items;
- if(predictionItems?.properties?.product_id){
+ const predictionSchema=schema.properties?.predictions;
+ const suggestionSchema=schema.properties?.suggestions;
+ const predictionItems=predictionSchema?.items;
+ const suggestionItems=suggestionSchema?.items;
+ if(predictionItems?.properties?.product_id&&predictionSchema){
   predictionItems.properties.product_id={type:'string',enum:ids};
-  schema.properties.predictions.maxItems=Math.min(12,ids.length);
+  predictionSchema.maxItems=Math.min(12,ids.length);
  }
  if(predictionItems?.properties?.evidence)predictionItems.properties.evidence.uniqueItems=true;
  if(suggestionItems?.properties?.product_id){
