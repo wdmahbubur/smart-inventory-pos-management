@@ -27,8 +27,9 @@ test('v3 prompt asks for model-authored numeric forecasts and prose, sends obser
  const data=JSON.parse(prompt.user);assert.ok(data.observed_store_data.products[0].daily_units.length===56);
  assert.equal(data.available_sections,undefined);assert.equal(data.observed_store_data.forecast,undefined);
  const schema=JSON.stringify(prompt.schema);assert.ok(schema.includes('expected_units_7d'));assert.ok(schema.includes('explanation'));assert.ok(!schema.includes('summary_key'));
- assert.deepEqual((prompt.schema as any).properties.predictions.items.properties.product_id.enum,[predictionProductId]);
- assert.equal((prompt.schema as any).properties.predictions.items.properties.evidence.uniqueItems,true);
+ const schemaShape=prompt.schema as {properties:{predictions:{items:{properties:{product_id:{enum:string[]};evidence:{uniqueItems:boolean}}}}}};
+ assert.deepEqual(schemaShape.properties.predictions.items.properties.product_id.enum,[predictionProductId]);
+ assert.equal(schemaShape.properties.predictions.items.properties.evidence.uniqueItems,true);
 });
 test('model-authored forecast and explanation survive validation unchanged and may exceed available stock',()=>{
  const raw=predictionOutput();assert.ok(raw.predictions[0].expected_units_7d>predictionFacts().products[0].quantity);
