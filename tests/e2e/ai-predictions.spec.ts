@@ -28,7 +28,7 @@ test('AI generation is explicit, twice-clicked output changes, saved results rel
  await page.getByRole('button',{name:'Generate AI predictions',exact:true}).click();await expect(page.getByText('New AI result',{exact:true})).toBeVisible();await expect(page.getByText(/Response: mock-response-1/)).toBeVisible();
  await expect(page.getByText('Replenish the beverage in a small first batch',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Generate new AI predictions',exact:true}).click();await expect(page.getByText(/Response: mock-response-2/)).toBeVisible();expect(postCalls).toBe(2);
- await page.getByRole('button',{name:'Generate new AI predictions',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Showing your previous saved result.');await expect(page.getByText(/Response: mock-response-2/)).toBeVisible();
+ await page.getByRole('button',{name:'Generate new AI predictions',exact:true}).click();await expect(page.getByRole('alert').filter({hasText:'AI provider temporarily unavailable'})).toContainText('Showing your previous saved result.');await expect(page.getByText(/Response: mock-response-2/)).toBeVisible();
  await page.reload();await expect(page.getByText('Saved AI result',{exact:true})).toBeVisible();expect(postCalls).toBe(3);
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
  mkdirSync('test-results/screenshots/390',{recursive:true});
