@@ -24,6 +24,14 @@ test('AI request timeout defaults to 50 seconds and upgrades the old 30-second p
  assert.throws(()=>readAIConfig({OPENROUTER_API_KEY:'test-key',AI_REQUEST_TIMEOUT_MS:'60001'}));
 });
 
+test('AI output budget defaults to 9000 and upgrades old ranking/forecast budgets',()=>{
+ assert.equal(readAIConfig({OPENROUTER_API_KEY:'test-key'}).maxTokens,9000);
+ assert.equal(readAIConfig({OPENROUTER_API_KEY:'test-key',AI_MAX_OUTPUT_TOKENS:'1500'}).maxTokens,9000);
+ assert.equal(readAIConfig({OPENROUTER_API_KEY:'test-key',AI_MAX_OUTPUT_TOKENS:'6000'}).maxTokens,9000);
+ assert.equal(readAIConfig({OPENROUTER_API_KEY:'test-key',AI_MAX_OUTPUT_TOKENS:'12000'}).maxTokens,12000);
+ assert.throws(()=>readAIConfig({OPENROUTER_API_KEY:'test-key',AI_MAX_OUTPUT_TOKENS:'16001'}));
+});
+
 test('OpenRouter defaults to the requested Apodex free model and preserves explicit overrides',()=>{
  assert.equal(DEFAULT_OPENROUTER_MODEL,'apodex/apodex-1.1-mini:free');
  for(const model of [undefined,'','   ']){
