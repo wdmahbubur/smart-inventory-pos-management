@@ -102,23 +102,37 @@ test('saved predictions retain provenance and are marked stale on changed data/d
  current.facts_hash='changed';assert.equal(deliverPrediction(savedPrediction(),current).stale,true);
  assert.equal(deliverPrediction(savedPrediction(),current).source,'ai_generated');
 });
-test('OpenRouter uses strict structured output for Apodex and keeps provider response metadata',async()=>{
+test('Apodex uses the working Postman-style plain JSON request first',async()=>{
  let calls=0;
- const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.tools,undefined);assert.equal(body.tool_choice,undefined);assert.equal(body.provider,undefined);assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.strict,true);assert.ok(body.response_format.json_schema.schema.properties.predictions);return Response.json(wire());};
+ const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.response_format,undefined);assert.match(body.messages[0].content,/exactly one JSON object/i);assert.match(body.messages[1].content,/Required JSON schema/);assert.equal(body.max_tokens,6000);return Response.json(wire());};
  const provider=new OpenRouterProvider(config.model,'test-key',6000,transport);
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
  assert.equal(calls,1);assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-test-123');assert.equal(response.responseModel,'apodex/apodex-1.1-mini');
 });
 
-test('OpenRouter falls back to a Postman-like plain JSON request when strict schema parameters are rejected',async()=>{
+test('other OpenRouter models retain strict structured output with plain JSON fallback',async()=>{
+ let calls=0;
+ const provider=new OpenRouterProvider('vendor/structured-model','test-key',6000,async(_url,options)=>{
+  calls++;const body=JSON.parse(String(options!.body));
+  if(calls===1){assert.equal(body.response_format.type,'json_schema');return new Response('',{status:400});}
+  assert.equal(body.response_format,undefined);return Response.json(wire());
+ });
+ const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
+});
+
+test('Apodex retries a truncated response once with a compact larger budget',async()=>{
  let calls=0;
  const provider=new OpenRouterProvider(config.model,'test-key',6000,async(_url,options)=>{
   calls++;const body=JSON.parse(String(options!.body));
-  if(calls===1){assert.equal(body.response_format.type,'json_schema');return new Response('',{status:400});}
-  assert.equal(body.response_format,undefined);assert.equal(body.provider,undefined);assert.match(body.messages[0].content,/exactly one JSON object/i);assert.match(body.messages[1].content,/Required JSON schema/);return Response.json(wire());
+  if(calls===1){assert.equal(body.max_tokens,6000);return Response.json({...wire(),choices:[{finish_reason:'length',message:{content:''}}]});}
+  assert.equal(body.max_tokens,12000);assert.match(body.messages[0].content,/previous response was too long/i);return Response.json(wire());
  });
- const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
- assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
+ const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
+});
+
+test('Apodex rejects output only after the compact retry is also truncated',async()=>{
+ let calls=0;const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>{calls++;return Response.json({...wire(),choices:[{finish_reason:'length',message:{content:''}}]});});
+ await assert.rejects(provider.generateInventoryInsights(predictionFacts(),'en',ctx()),/AI response/);assert.equal(calls,2);
 });
 
 test('OpenRouter also accepts the equivalent tool-call shape as a compatibility fallback',async()=>{
@@ -126,15 +140,17 @@ test('OpenRouter also accepts the equivalent tool-call shape as a compatibility 
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
  assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-tool-123');
 });
-test('OpenRouter rejects truncated, malformed and oversized structured output without saving/fallback',async()=>{
- for(const value of [{...wire(),choices:[{finish_reason:'length'}]},{choices:[{finish_reason:'stop',message:{content:'some text'}}]},null]){
+
+test('OpenRouter rejects malformed and oversized output without saving',async()=>{
+ for(const value of [{choices:[{finish_reason:'stop',message:{content:'some text'}}]},null]){
   const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>Response.json(value));
   await assert.rejects(provider.generateInventoryInsights(predictionFacts(),'en',ctx()));
  }
  const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>new Response('x'.repeat(150000)));
  await assert.rejects(provider.generateInventoryInsights(predictionFacts(),'en',ctx()));
 });
-test('OpenRouter retries only transient failures and does not substitute a deterministic forecast',async()=>{
+
+test('OpenRouter retries transient failures and does not substitute a deterministic forecast',async()=>{
  let calls=0;const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>{calls++;return calls===1?new Response('',{status:503}):Response.json(wire());});
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
 });
