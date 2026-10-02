@@ -35,7 +35,7 @@ export function Insights({initialData}:{initialData:PredictionReadResult}){
   if(generating.current)return;
   generating.current=true;++epoch.current;setBusy(true);setError('');
   try{
-   const response=await fetch('/api/insights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language,regenerate:true}),signal:AbortSignal.timeout(70000)});
+   const response=await fetch('/api/insights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({language,regenerate:true}),signal:AbortSignal.timeout(95000)});
    const result=await response.json();
    if(!response.ok)throw new Error(result.error?.message??'AI generation failed. Your previous saved result is unchanged.');
    if(!result.insight||result.provider_called!==true||result.cached!==false)throw new Error('No new AI result was returned. Your previous saved result is unchanged.');

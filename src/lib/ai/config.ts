@@ -49,10 +49,10 @@ export function readAIConfig(env:Record<string,string|undefined>):AIConfig{
   if(!key||!model||!geminiModel.test(model))throw new AppError('AI_NOT_CONFIGURED');
  }
 
- const requestedTimeoutMs=Number(clean(env.AI_REQUEST_TIMEOUT_MS)??50000);
- // Older production environments were pinned to 30s. Full model-authored predictions can
- // legitimately take longer on free OpenRouter models, so transparently upgrade that legacy value.
- const timeoutMs=requestedTimeoutMs===30000?50000:requestedTimeoutMs;
+ const requestedTimeoutMs=Number(clean(env.AI_REQUEST_TIMEOUT_MS)??75000);
+ // Leave 15s inside the route/DB lease's 90s budget for validation and persistence.
+ // Upgrade both historical deployment defaults; retain other explicit values.
+ const timeoutMs=[30000,50000].includes(requestedTimeoutMs)?75000:requestedTimeoutMs;
  const requestedTokens=Number(clean(env.AI_MAX_OUTPUT_TOKENS)??9000);
  // Older deployments used 1500/6000 tokens. Reasoning-first forecasting models need enough
  // completion room for JSON plus their internal reasoning without truncating the final object.
@@ -61,7 +61,7 @@ export function readAIConfig(env:Record<string,string|undefined>):AIConfig{
  const configuredPromptVersion=clean(env.AI_PROMPT_VERSION);
  const promptVersion=!configuredPromptVersion||['inventory-insights-v1','inventory-suggestions-v2'].includes(configuredPromptVersion)?PREDICTION_PROMPT_VERSION:configuredPromptVersion;
  if(!/^inventory-predictions-v3(?:-[a-zA-Z0-9._-]+)?$/.test(promptVersion)||promptVersion.length>100)throw new AppError('AI_NOT_CONFIGURED');
- if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>60000||!Number.isInteger(maxTokens)||maxTokens<2000||maxTokens>16000||!Number.isInteger(quota)||quota<1||quota>10)throw new AppError('AI_NOT_CONFIGURED');
+ if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>75000||!Number.isInteger(maxTokens)||maxTokens<2000||maxTokens>16000||!Number.isInteger(quota)||quota<1||quota>10)throw new AppError('AI_NOT_CONFIGURED');
 
  return {
   provider,model,key,timeoutMs,maxTokens,quota,

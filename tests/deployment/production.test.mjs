@@ -54,12 +54,17 @@ test('only client configuration reaches Vercel; optional AI provider keys stay s
   assert.equal(openrouter.find(v=>v.key==='OPENROUTER_API_KEY').type,'encrypted');
   assert.equal(openrouter.find(v=>v.key==='AI_PROVIDER').value,'openrouter');
   assert.equal(openrouter.find(v=>v.key==='OPENROUTER_TEXT_MODEL').value,'apodex/apodex-1.1-mini:free');
+  assert.equal(openrouter.find(v=>v.key==='AI_REQUEST_TIMEOUT_MS').value,'75000');
+  assert.equal(openrouter.find(v=>v.key==='AI_MAX_OUTPUT_TOKENS').value,'9000');
+  assert.equal(openrouter.find(v=>v.key==='AI_PROMPT_VERSION').value,'inventory-predictions-v3');
   assert.ok(!openrouter.some(v=>v.key.startsWith('NEXT_PUBLIC_')&&v.value==='test-openrouter-key'));
   assert.throws(()=>validateTarget(target,{...env,OPENROUTER_API_KEY:'x',OPENROUTER_TEXT_MODEL:'bad model'}),/SET_OPENROUTER_TEXT_MODEL/);
 
   const gemini=environmentValues(target,origin,{...env,GEMINI_API_KEY:'test-gemini-key',GEMINI_TEXT_MODEL:'chosen-model'});
   assert.equal(gemini.find(v=>v.key==='GEMINI_API_KEY').type,'encrypted');
   assert.equal(gemini.find(v=>v.key==='AI_PROVIDER').value,'gemini');
+  assert.equal(gemini.find(v=>v.key==='AI_REQUEST_TIMEOUT_MS').value,'75000');
+  assert.equal(gemini.find(v=>v.key==='AI_PROMPT_VERSION').value,'inventory-predictions-v3');
   assert.throws(()=>validateTarget(target,{...env,GEMINI_API_KEY:'test-gemini-key'}),/SET_GEMINI_TEXT_MODEL/);
 });
 

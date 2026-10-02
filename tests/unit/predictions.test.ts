@@ -159,3 +159,46 @@ test('Gemini remains replaceable and returns full numeric predictions, prose and
  const provider=new GeminiProvider('gemini-fixture','test-key',6000,transport);
  const output:ProviderPrediction=await provider.generateInventoryInsights(predictionFacts(),'bn',ctx());assert.deepEqual(output.output,predictionOutput());assert.equal(output.responseId,'gemini-test-id');
 });
+
+test('Apodex disables optional reasoning for both the initial and compact retry',async()=>{
+ for(const model of ['apodex/apodex-1.1-mini:free','apodex/apodex-1.1-mini']){
+  let calls=0;
+  const provider=new OpenRouterProvider(model,'test-key',6000,async(_url,options)=>{
+   const body=JSON.parse(String(options!.body));
+   assert.deepEqual(body.reasoning,{effort:'none'});
+   assert.equal(body.max_tokens,calls===0?6000:12000);
+   return ++calls===1?Response.json({...wire(),choices:[{finish_reason:'length',message:{content:''}}]}):Response.json(wire());
+  });
+  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
+  assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
+ }
+});
+
+test('explicit models that may require reasoning retain their default reasoning settings',async()=>{
+ const provider=new OpenRouterProvider('vendor/reasoning-model','test-key',6000,async(_url,options)=>{
+  assert.equal(JSON.parse(String(options!.body)).reasoning,undefined);
+  return Response.json(wire());
+ });
+ assert.deepEqual((await provider.generateInventoryInsights(predictionFacts(),'en',ctx())).output,predictionOutput());
+});
+
+test('a timed-out provider releases the prediction lease without saving or retrying',async()=>{
+ const {deps,counts}=dependencies();let calls=0;
+ deps.config={...config,timeoutMs:1000};
+ deps.provider=new OpenRouterProvider(config.model,'test-key',6000,async(_url,options)=>{
+  calls++;
+  return new Promise((_resolve,reject)=>options!.signal!.addEventListener('abort',()=>reject(options!.signal!.reason),{once:true}));
+ });
+ // AbortSignal timers are unref'ed; keep the test process alive until it fires.
+ const keepAlive=setTimeout(()=>undefined,2000);
+ try{await assert.rejects(runPrediction('en',deps),(error:unknown)=>error instanceof AppError&&error.code==='AI_TIMEOUT');}
+ finally{clearTimeout(keepAlive);}
+ assert.equal(calls,1);assert.equal(counts().saves,0);assert.equal(counts().releases,1);
+});
+
+test('an expired request cannot start another upstream call',async()=>{
+ let calls=0;
+ const provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>{calls++;return Response.json(wire());});
+ await assert.rejects(provider.generateInventoryInsights(predictionFacts(),'en',{...ctx(),signal:AbortSignal.abort()}),(error:unknown)=>error instanceof AppError&&error.code==='AI_TIMEOUT');
+ assert.equal(calls,0);
+});

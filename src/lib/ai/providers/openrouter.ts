@@ -45,7 +45,10 @@ export class OpenRouterProvider implements PredictionProvider{
     const compactInstruction=compact
      ?'\nYour previous response was too long or incomplete. Return a compact valid JSON object: at most 6 predictions and 4 suggestions; one short sentence per explanation; one assumption and one limitation. Do not omit required fields.'
      :'';
-    const base={model:this.model,temperature:0.2,max_tokens:tokenBudget};
+    // Apodex optional reasoning can consume the interactive budget before returning JSON.
+    // Other models retain their defaults, including models that require reasoning.
+    const base={model:this.model,temperature:0.2,max_tokens:tokenBudget,
+     ...(this.model.split(':')[0]==='apodex/apodex-1.1-mini'?{reasoning:{effort:'none'}}:{})};
     const body=mode==='structured'
      ?{...base,messages:[{role:'system',content:prompt.system+compactInstruction},{role:'user',content:prompt.user}],response_format:{type:'json_schema',json_schema:{name:'inventory_prediction',strict:true,schema:prompt.schema}}}
      :{...base,messages:[
@@ -53,6 +56,7 @@ export class OpenRouterProvider implements PredictionProvider{
        {role:'user',content:`${prompt.user}\n\nRequired JSON schema:\n${JSON.stringify(prompt.schema)}`}
       ]};
     try{
+     context.signal.throwIfAborted();
      const response=await this.transport('https://openrouter.ai/api/v1/chat/completions',{
       method:'POST',cache:'no-store',headers,signal:context.signal,body:JSON.stringify(body)
      });
