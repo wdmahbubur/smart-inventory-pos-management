@@ -1,5 +1,5 @@
 import {AppError} from '../../errors';
-import {buildPredictionPrompt} from '../prediction-prompt';
+import {buildPredictionPrompt,resolvePredictionReferences} from '../prediction-prompt';
 import {readProviderJson,providerMetadata} from '../provider-response';
 import type {Language} from '../contracts';
 import type {PredictionProvider,PredictionFacts,PredictionRequestContext,ProviderPrediction} from '../prediction-contracts';
@@ -23,7 +23,7 @@ type OpenRouterWire={
  error?:unknown;
  choices?:{finish_reason?:string;message?:{content?:unknown;tool_calls?:{type?:string;function?:{name?:string;arguments?:unknown}}[]}}[];
 };
-type Mode='structured'|'plain_json';
+type Mode='tool'|'structured'|'json_object'|'plain_json';
 
 export class OpenRouterProvider implements PredictionProvider{
  readonly name='openrouter';
@@ -33,10 +33,10 @@ export class OpenRouterProvider implements PredictionProvider{
   const headers:Record<string,string>={'Authorization':`Bearer ${this.apiKey}`,'Content-Type':'application/json','X-Title':'Smart Inventory'};
   if(this.appUrl){try{const url=new URL(this.appUrl);if(['http:','https:'].includes(url.protocol))headers['HTTP-Referer']=url.origin;}catch{/* Optional attribution is not required. */}}
 
-  // The current free Apodex route has repeatedly rejected response_format with HTTP 400 in
-  // production even though the model advertises structured-output support. Match the user's
-  // working Postman shape for this model and rely on the same Zod + database validators after.
-  const modes:Mode[]=this.model.startsWith('apodex/apodex-1.1-mini')?['plain_json']:['structured','plain_json'];
+  // Apodex completes a forced function call reliably in live English/Bengali checks.
+  // Its endpoint rejects json_schema; JSON object mode remains a compatibility fallback.
+  // This tool only formats advisory output; it never executes a store mutation.
+  const modes:Mode[]=this.model.split(':')[0]==='apodex/apodex-1.1-mini'?['tool','json_object','plain_json']:['structured','plain_json'];
 
   for(const mode of modes){
    for(let attempt=0;attempt<2;attempt++){
@@ -49,12 +49,17 @@ export class OpenRouterProvider implements PredictionProvider{
     // Other models retain their defaults, including models that require reasoning.
     const base={model:this.model,temperature:0.2,max_tokens:tokenBudget,
      ...(this.model.split(':')[0]==='apodex/apodex-1.1-mini'?{reasoning:{effort:'none'}}:{})};
-    const body=mode==='structured'
+    const body=mode==='tool'
+     ?{...base,messages:[
+       {role:'system',content:`${prompt.system}\nSubmit your final result using ${TOOL_NAME}. For this compact response include at most ${Math.min(4,facts.products.length)} predictions and 3 suggestions. All required fields must be present.${compactInstruction}`},
+       {role:'user',content:prompt.user}
+      ],tools:[{type:'function',function:{name:TOOL_NAME,description:'Return your completed inventory forecast and suggestions for display only; does not change inventory.',parameters:prompt.schema}}],tool_choice:{type:'function',function:{name:TOOL_NAME}}}
+     :mode==='structured'
      ?{...base,messages:[{role:'system',content:prompt.system+compactInstruction},{role:'user',content:prompt.user}],response_format:{type:'json_schema',json_schema:{name:'inventory_prediction',strict:true,schema:prompt.schema}}}
      :{...base,messages:[
        {role:'system',content:`${prompt.system}\nReturn exactly one JSON object and no markdown. The JSON must match the schema supplied by the user.${compactInstruction}`},
        {role:'user',content:`${prompt.user}\n\nRequired JSON schema:\n${JSON.stringify(prompt.schema)}`}
-      ]};
+      ],...(mode==='json_object'?{response_format:{type:'json_object'}}:{})};
     try{
      context.signal.throwIfAborted();
      const response=await this.transport('https://openrouter.ai/api/v1/chat/completions',{
@@ -64,7 +69,7 @@ export class OpenRouterProvider implements PredictionProvider{
       const status=response.status;
       await response.body?.cancel();
       console.warn(JSON.stringify({event:'openrouter_request_rejected',request_id:context.requestId,model:this.model,mode,status,attempt,token_budget:tokenBudget}));
-      if(mode==='structured'&&[400,404,415,422].includes(status))break;
+      if(mode!=='plain_json'&&[400,404,415,422].includes(status))break;
       if(attempt===0&&(status===429||status>=500)&&!context.signal.aborted){await new Promise(resolve=>setTimeout(resolve,250));continue;}
       throw new AppError('AI_UNAVAILABLE');
      }
@@ -73,7 +78,7 @@ export class OpenRouterProvider implements PredictionProvider{
      if(!parsed||typeof parsed!=='object')invalid('provider_response_shape');
      if(parsed.error){
       console.warn(JSON.stringify({event:'openrouter_error_payload',request_id:context.requestId,model:this.model,mode,attempt}));
-      if(mode==='structured')break;
+      if(mode==='structured'||mode==='tool')break;
       throw new AppError('AI_UNAVAILABLE');
      }
      const choice=parsed.choices?.[0];
@@ -91,12 +96,12 @@ export class OpenRouterProvider implements PredictionProvider{
      }else{
       output=parsePayload(choice.message?.content);
      }
-     return {output,responseId:providerMetadata(parsed.id,200),responseModel:providerMetadata(parsed.model,160)};
+     return {output:resolvePredictionReferences(output,prompt.productReferences),responseId:providerMetadata(parsed.id,200),responseModel:providerMetadata(parsed.model,160)};
     }catch(error){
      if(context.signal.aborted)throw new AppError('AI_TIMEOUT');
      if(error instanceof AppError){
-      if(mode==='structured'&&error.code==='AI_INVALID_OUTPUT'){
-       console.warn(JSON.stringify({event:'openrouter_structured_output_invalid',request_id:context.requestId,model:this.model,reason:error.details?.reason??'unknown'}));
+      if((mode==='structured'||mode==='tool')&&error.code==='AI_INVALID_OUTPUT'&&error.details?.reason!=='provider_truncated'){
+       console.warn(JSON.stringify({event:'openrouter_formatted_output_invalid',request_id:context.requestId,model:this.model,mode,reason:error.details?.reason??'unknown'}));
        break;
       }
       if(mode==='plain_json'&&attempt===0&&error.code==='AI_INVALID_OUTPUT'&&['provider_json','provider_content_missing'].includes(String(error.details?.reason??''))){

@@ -1,5 +1,5 @@
 import {AppError} from '../../errors';
-import {buildPredictionPrompt} from '../prediction-prompt';
+import {buildPredictionPrompt,resolvePredictionReferences} from '../prediction-prompt';
 import {readProviderJson,providerMetadata} from '../provider-response';
 import type {Language} from '../contracts';
 import type {PredictionProvider,PredictionFacts,PredictionRequestContext,ProviderPrediction} from '../prediction-contracts';
@@ -18,7 +18,7 @@ export class GeminiProvider implements PredictionProvider{
     const content=candidate.content?.parts?.filter(part=>!part.thought).map(part=>part.text??'').join('');
     if(!content||content.length>40_000)throw new AppError('AI_INVALID_OUTPUT');
     let output:unknown;try{output=JSON.parse(content);}catch{throw new AppError('AI_INVALID_OUTPUT');}
-    return {output,responseId:providerMetadata(parsed.responseId,200),responseModel:providerMetadata(parsed.modelVersion,160)};
+    return {output:resolvePredictionReferences(output,prompt.productReferences),responseId:providerMetadata(parsed.responseId,200),responseModel:providerMetadata(parsed.modelVersion,160)};
    }catch(error){if(context.signal.aborted)throw new AppError('AI_TIMEOUT');if(error instanceof AppError)throw error;if(attempt===0)continue;throw new AppError('AI_UNAVAILABLE');}
   }
   throw new AppError('AI_UNAVAILABLE');

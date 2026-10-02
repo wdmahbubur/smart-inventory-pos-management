@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {AppError} from '../../src/lib/errors';
 import {readAIConfig} from '../../src/lib/ai/config';
-import {buildPredictionPrompt} from '../../src/lib/ai/prediction-prompt';
+import {buildPredictionPrompt,resolvePredictionReferences} from '../../src/lib/ai/prediction-prompt';
 import {validatePrediction,deliverPrediction} from '../../src/lib/ai/prediction-validation';
 import {runPrediction,loadPrediction,type PredictionDependencies} from '../../src/lib/ai/prediction-generation';
 import {OpenRouterProvider} from '../../src/lib/ai/providers/openrouter';
@@ -27,13 +27,32 @@ test('v3 prompt asks for model-authored numeric forecasts and prose, sends obser
  const data=JSON.parse(prompt.user);assert.ok(data.observed_store_data.products[0].daily_units.length===56);
  assert.equal(data.available_sections,undefined);assert.equal(data.observed_store_data.forecast,undefined);
  const schema=JSON.stringify(prompt.schema);assert.ok(schema.includes('expected_units_7d'));assert.ok(schema.includes('explanation'));assert.ok(!schema.includes('summary_key'));
+ assert.ok(!schema.includes('"$ref"'), 'shared number/text/evidence fields must be inlined for JSON-only models');
  const schemaShape=prompt.schema as {properties:{predictions:{items:{properties:{product_id:{enum:string[]};evidence:{uniqueItems:boolean}}}}}};
- assert.deepEqual(schemaShape.properties.predictions.items.properties.product_id.enum,[predictionProductId]);
+ assert.deepEqual(schemaShape.properties.predictions.items.properties.product_id.enum,['product_1']);
+ assert.equal(data.observed_store_data.products[0].id,'product_1');
+ assert.equal(prompt.productReferences.product_1,predictionProductId);
+ assert.ok(!prompt.user.includes(predictionProductId));
  assert.equal(schemaShape.properties.predictions.items.properties.evidence.uniqueItems,true);
 });
 test('model-authored forecast and explanation survive validation unchanged and may exceed available stock',()=>{
  const raw=predictionOutput();assert.ok(raw.predictions[0].expected_units_7d>predictionFacts().products[0].quantity);
  const valid=validatePrediction(raw,predictionFacts());assert.deepEqual(valid,raw);assert.equal(valid.predictions[0].expected_units_7d,43);
+});
+test('short references resolve exactly without changing estimates or mutating model/source data',()=>{
+ const facts=predictionFacts(),original=structuredClone(facts),prompt=buildPredictionPrompt(facts,'en',config.promptVersion);
+ const raw=predictionOutput('product_1'),before=structuredClone(raw);
+ const resolved=resolvePredictionReferences(raw,prompt.productReferences);
+ assert.deepEqual(validatePrediction(resolved,facts),predictionOutput());
+ assert.deepEqual(raw,before);assert.deepEqual(facts,original);
+ assert.match(prompt.system,/at most 1 business-relevant products/);
+ assert.match(prompt.system,/ONLY ONCE/);
+});
+test('reference resolution rejects invented and cross-store IDs instead of guessing a UUID',()=>{
+ const prompt=buildPredictionPrompt(predictionFacts(),'en',config.promptVersion);
+ for(const id of ['product_2',crypto.randomUUID(),predictionProductId.replace('-','')]){
+  assert.throws(()=>resolvePredictionReferences(predictionOutput(id),prompt.productReferences),(error:unknown)=>error instanceof AppError&&error.details?.reason==='unknown_product_reference');
+ }
 });
 test('rejects canned rank-only output, fabricated/cross-store product IDs, duplicate forecasts and incoherent ranges',()=>{
  assert.throws(()=>validatePrediction({summary_key:'growth',section_keys:['demand']},predictionFacts()),/AI response/);
@@ -102,12 +121,12 @@ test('saved predictions retain provenance and are marked stale on changed data/d
  current.facts_hash='changed';assert.equal(deliverPrediction(savedPrediction(),current).stale,true);
  assert.equal(deliverPrediction(savedPrediction(),current).source,'ai_generated');
 });
-test('Apodex uses the working Postman-style plain JSON request first',async()=>{
+test('Apodex requests a forced advisory function call without unsupported JSON schema',async()=>{
  let calls=0;
- const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.response_format,undefined);assert.match(body.messages[0].content,/exactly one JSON object/i);assert.match(body.messages[1].content,/Required JSON schema/);assert.equal(body.max_tokens,6000);return Response.json(wire());};
+ const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.response_format,undefined);assert.deepEqual(body.tool_choice,{type:'function',function:{name:'submit_inventory_prediction'}});assert.equal(body.tools.length,1);assert.ok(body.tools[0].function.parameters.properties.predictions);assert.match(body.messages[0].content,/at most 1 predictions/);assert.equal(body.max_tokens,6000);return Response.json(toolWire());};
  const provider=new OpenRouterProvider(config.model,'test-key',6000,transport);
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
- assert.equal(calls,1);assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-test-123');assert.equal(response.responseModel,'apodex/apodex-1.1-mini');
+ assert.equal(calls,1);assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-tool-123');assert.equal(response.responseModel,'apodex/apodex-1.1-mini');
 });
 
 test('other OpenRouter models retain strict structured output with plain JSON fallback',async()=>{
@@ -118,6 +137,25 @@ test('other OpenRouter models retain strict structured output with plain JSON fa
   assert.equal(body.response_format,undefined);return Response.json(wire());
  });
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
+});
+test('Apodex resolves its short response IDs before the generation validates and saves them',async()=>{
+ const {deps,counts}=dependencies();
+ deps.provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>Response.json(toolWire(predictionOutput('product_1'))));
+ const result=await runPrediction('en',deps);
+ assert.equal(result.insight!.output.predictions[0].product_id,predictionProductId);
+ assert.equal(result.insight!.output.suggestions[0].product_id,predictionProductId);
+ assert.equal(counts().saves,1);
+});
+test('Apodex falls back through supported JSON modes when formatting parameters are rejected',async()=>{
+ let calls=0;
+ const provider=new OpenRouterProvider(config.model,'test-key',6000,async(_url,options)=>{
+  const body=JSON.parse(String(options!.body));
+  if(++calls===1){assert.ok(body.tool_choice);return new Response('',{status:400});}
+  if(calls===2){assert.deepEqual(body.response_format,{type:'json_object'});return new Response('',{status:400});}
+  assert.equal(body.response_format,undefined);return Response.json(wire(predictionOutput('product_1')));
+ });
+ const result=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
+ assert.equal(calls,3);assert.deepEqual(result.output,predictionOutput());
 });
 
 test('Apodex retries a truncated response once with a compact larger budget',async()=>{
