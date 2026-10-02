@@ -53,14 +53,15 @@ export function readAIConfig(env:Record<string,string|undefined>):AIConfig{
  // Older production environments were pinned to 30s. Full model-authored predictions can
  // legitimately take longer on free OpenRouter models, so transparently upgrade that legacy value.
  const timeoutMs=requestedTimeoutMs===30000?50000:requestedTimeoutMs;
- const requestedTokens=Number(clean(env.AI_MAX_OUTPUT_TOKENS)??6000);
- // Old rank-only deployments used 1500 tokens. Full generated analyses need a larger output budget.
- const maxTokens=requestedTokens===1500?6000:requestedTokens;
+ const requestedTokens=Number(clean(env.AI_MAX_OUTPUT_TOKENS)??9000);
+ // Older deployments used 1500/6000 tokens. Reasoning-first forecasting models need enough
+ // completion room for JSON plus their internal reasoning without truncating the final object.
+ const maxTokens=[1500,6000].includes(requestedTokens)?9000:requestedTokens;
  const quota=Number(clean(env.AI_MAX_REQUESTS_PER_HOUR)??10);
  const configuredPromptVersion=clean(env.AI_PROMPT_VERSION);
  const promptVersion=!configuredPromptVersion||['inventory-insights-v1','inventory-suggestions-v2'].includes(configuredPromptVersion)?PREDICTION_PROMPT_VERSION:configuredPromptVersion;
  if(!/^inventory-predictions-v3(?:-[a-zA-Z0-9._-]+)?$/.test(promptVersion)||promptVersion.length>100)throw new AppError('AI_NOT_CONFIGURED');
- if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>60000||!Number.isInteger(maxTokens)||maxTokens<2000||maxTokens>12000||!Number.isInteger(quota)||quota<1||quota>10)throw new AppError('AI_NOT_CONFIGURED');
+ if(!Number.isInteger(timeoutMs)||timeoutMs<1000||timeoutMs>60000||!Number.isInteger(maxTokens)||maxTokens<2000||maxTokens>16000||!Number.isInteger(quota)||quota<1||quota>10)throw new AppError('AI_NOT_CONFIGURED');
 
  return {
   provider,model,key,timeoutMs,maxTokens,quota,
