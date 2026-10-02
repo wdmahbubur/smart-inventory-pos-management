@@ -45,6 +45,10 @@ export function validatePrediction(raw:unknown,facts:PredictionFacts):Prediction
   suggestion.evidence=uniqueEvidence(suggestion.evidence);
   if(suggestion.action==='restock'){
    if(!product||!seen.has(product.id)||!suggestion.reorder_quantity||suggestion.discount_percent!==null)continue;
+   const forecast=output.predictions.find(prediction=>prediction.product_id===product.id)!;
+   // Do not recommend replenishment using historical sales when the model's
+   // own next-week forecast leaves stock at or above the minimum reserve.
+   if(product.quantity-forecast.expected_units_7d>=product.minimum_stock)continue;
   }else if(suggestion.reorder_quantity!==null){
    suggestion.reorder_quantity=null;
   }

@@ -138,6 +138,22 @@ test('other OpenRouter models retain strict structured output with plain JSON fa
  });
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
 });
+test('restock guidance must agree with the model forecast instead of treating past sales as future demand',()=>{
+ const facts=predictionFacts(),output=predictionOutput();
+ facts.products[0].quantity=37;facts.products[0].minimum_stock=10;
+ facts.products[0].units_7d=36;output.predictions[0].expected_units_7d=18;output.predictions[0].low_units_7d=10;output.predictions[0].high_units_7d=28;
+ output.suggestions.push({...output.suggestions[0],action:'collect_data',reorder_quantity:null});
+ const validated=validatePrediction(output,facts);
+ assert.deepEqual(validated.suggestions.map(s=>s.action),['collect_data']);
+ assert.equal(validated.predictions[0].expected_units_7d,18);
+});
+test('restock remains valid when the next-week forecast leaves stock below the minimum reserve',()=>{
+ const facts=predictionFacts(),output=predictionOutput();
+ facts.products[0].quantity=50;
+ assert.equal(validatePrediction(output,facts).suggestions[0].reorder_quantity,40);
+ facts.products[0].quantity=53;
+ assert.throws(()=>validatePrediction(output,facts),(error:unknown)=>error instanceof AppError&&error.details?.reason==='no_safe_suggestions');
+});
 test('Apodex resolves its short response IDs before the generation validates and saves them',async()=>{
  const {deps,counts}=dependencies();
  deps.provider=new OpenRouterProvider(config.model,'test-key',6000,async()=>Response.json(toolWire(predictionOutput('product_1'))));
