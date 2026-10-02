@@ -65,13 +65,13 @@ export function environmentValues(target, origin, env) {
     AI_PROVIDER: 'openrouter',
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
     OPENROUTER_TEXT_MODEL: env.OPENROUTER_TEXT_MODEL ?? DEFAULT_OPENROUTER_MODEL,
-    AI_REQUEST_TIMEOUT_MS: '30000', AI_MAX_REQUESTS_PER_HOUR: '10',
-    AI_MAX_OUTPUT_TOKENS: '1500', AI_PROMPT_VERSION: 'inventory-suggestions-v2',
+    AI_REQUEST_TIMEOUT_MS: '50000', AI_MAX_REQUESTS_PER_HOUR: '10',
+    AI_MAX_OUTPUT_TOKENS: '9000', AI_PROMPT_VERSION: 'inventory-predictions-v3',
   });
   else if (env.GEMINI_API_KEY) Object.assign(values, {
     AI_PROVIDER: 'gemini', GEMINI_API_KEY: env.GEMINI_API_KEY, GEMINI_TEXT_MODEL: env.GEMINI_TEXT_MODEL,
-    AI_REQUEST_TIMEOUT_MS: '30000', AI_MAX_REQUESTS_PER_HOUR: '10',
-    AI_MAX_OUTPUT_TOKENS: '1500', AI_PROMPT_VERSION: 'inventory-suggestions-v2',
+    AI_REQUEST_TIMEOUT_MS: '50000', AI_MAX_REQUESTS_PER_HOUR: '10',
+    AI_MAX_OUTPUT_TOKENS: '9000', AI_PROMPT_VERSION: 'inventory-predictions-v3',
   });
   // Do not erase existing optional AI configuration when no replacement is supplied.
   return Object.entries(values).map(([key, value]) => ({key, value,
