@@ -104,10 +104,21 @@ test('saved predictions retain provenance and are marked stale on changed data/d
 });
 test('OpenRouter uses strict structured output for Apodex and keeps provider response metadata',async()=>{
  let calls=0;
- const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.tools,undefined);assert.equal(body.tool_choice,undefined);assert.equal(body.provider.require_parameters,true);assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.strict,true);assert.ok(body.response_format.json_schema.schema.properties.predictions);return Response.json(wire());};
+ const transport:typeof fetch=async(url,options)=>{calls++;assert.equal(url,'https://openrouter.ai/api/v1/chat/completions');assert.equal(options!.cache,'no-store');const body=JSON.parse(String(options!.body));assert.equal(body.model,config.model);assert.equal(body.tools,undefined);assert.equal(body.tool_choice,undefined);assert.equal(body.provider,undefined);assert.equal(body.response_format.type,'json_schema');assert.equal(body.response_format.json_schema.strict,true);assert.ok(body.response_format.json_schema.schema.properties.predictions);return Response.json(wire());};
  const provider=new OpenRouterProvider(config.model,'test-key',6000,transport);
  const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
  assert.equal(calls,1);assert.deepEqual(response.output,predictionOutput());assert.equal(response.responseId,'gen-test-123');assert.equal(response.responseModel,'apodex/apodex-1.1-mini');
+});
+
+test('OpenRouter falls back to a Postman-like plain JSON request when strict schema parameters are rejected',async()=>{
+ let calls=0;
+ const provider=new OpenRouterProvider(config.model,'test-key',6000,async(_url,options)=>{
+  calls++;const body=JSON.parse(String(options!.body));
+  if(calls===1){assert.equal(body.response_format.type,'json_schema');return new Response('',{status:400});}
+  assert.equal(body.response_format,undefined);assert.equal(body.provider,undefined);assert.match(body.messages[0].content,/exactly one JSON object/i);assert.match(body.messages[1].content,/Required JSON schema/);return Response.json(wire());
+ });
+ const response=await provider.generateInventoryInsights(predictionFacts(),'en',ctx());
+ assert.equal(calls,2);assert.deepEqual(response.output,predictionOutput());
 });
 
 test('OpenRouter also accepts the equivalent tool-call shape as a compatibility fallback',async()=>{
